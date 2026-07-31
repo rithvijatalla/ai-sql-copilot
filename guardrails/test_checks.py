@@ -1,8 +1,9 @@
 """
 Tests for guardrails/checks.py.
 
-check_granularity_mismatch is pure text inspection, so it's tested directly
-against real SQL strings - no mocking needed.
+check_granularity_mismatch and check_messy_categorical_filter are pure text
+inspection, so they're tested directly against real SQL strings - no
+mocking needed.
 
 check_undefined_metric and check_out_of_scope call an LLM. Their parsing and
 tool-forcing wiring is tested against a mocked Anthropic client (fast,
@@ -23,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from guardrails.checks import (
     check_granularity_mismatch,
+    check_messy_categorical_filter,
     check_out_of_scope,
     check_undefined_metric,
 )
@@ -112,6 +114,52 @@ def test_granularity_mismatch_does_not_match_substring_of_table_name():
     # 'orders' must not match inside an unrelated identifier like 'reorders_view'.
     sql = "SELECT * FROM reorders_view JOIN marketing_spend ON 1=1"
     assert check_granularity_mismatch(sql) is None
+
+
+# ---------------------------------------------------------------------------
+# check_messy_categorical_filter - pure text inspection
+# ---------------------------------------------------------------------------
+
+
+def test_messy_categorical_filter_flags_bare_exact_match():
+    warning = check_messy_categorical_filter("SELECT COUNT(*) FROM customers WHERE region = 'West'")
+    assert warning is not None
+    assert "region" in warning
+    assert "'West'" in warning
+
+
+def test_messy_categorical_filter_flags_qualified_column():
+    sql = "SELECT COUNT(*) FROM customers c WHERE c.region = 'East'"
+    assert check_messy_categorical_filter(sql) is not None
+
+
+def test_messy_categorical_filter_is_case_insensitive_on_column_name():
+    sql = "SELECT * FROM customers WHERE REGION = 'North'"
+    assert check_messy_categorical_filter(sql) is not None
+
+
+def test_messy_categorical_filter_allows_lower_normalized_comparison():
+    sql = "SELECT COUNT(*) FROM customers WHERE LOWER(region) = 'west'"
+    assert check_messy_categorical_filter(sql) is None
+
+
+def test_messy_categorical_filter_allows_upper_normalized_comparison():
+    sql = "SELECT COUNT(*) FROM customers WHERE UPPER(region) = 'WEST'"
+    assert check_messy_categorical_filter(sql) is None
+
+
+def test_messy_categorical_filter_allows_trim_normalized_comparison():
+    sql = "SELECT COUNT(*) FROM customers WHERE TRIM(region) = 'West'"
+    assert check_messy_categorical_filter(sql) is None
+
+
+def test_messy_categorical_filter_ignores_other_columns():
+    sql = "SELECT * FROM orders WHERE channel = 'Email'"
+    assert check_messy_categorical_filter(sql) is None
+
+
+def test_messy_categorical_filter_ignores_queries_without_region_filter():
+    assert check_messy_categorical_filter("SELECT * FROM customers") is None
 
 
 # ---------------------------------------------------------------------------

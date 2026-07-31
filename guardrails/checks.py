@@ -32,6 +32,18 @@ a technically-valid but misleading or unsafe answer:
    check_undefined_metric, this needs semantic judgment ("list all customers
    in the West region" is a normal filtered query; "list all customers with
    full details" is not) rather than a keyword blocklist.
+
+4. check_messy_categorical_filter (post-generation, static analysis)
+   customers.region contains inconsistent values on purpose ("West",
+   "west", "WEST", "W" all mean the same thing - see
+   generate_synthetic_data.py's docstring). This was caught in testing:
+   "How many customers are in the West region?" generated
+   `WHERE region = 'West'` and returned 134 - a real number that silently
+   excludes every "west"/"WEST"/"W" row. Like check_granularity_mismatch,
+   this is a known fact about one specific column's data quality, not
+   something that needs semantic judgment - a regex for an unnormalized
+   exact-match comparison on that column is sufficient and faster/cheaper
+   than a model call.
 """
 
 import re
@@ -176,3 +188,37 @@ Otherwise there is no problem."""
         flag_field="needs_scoping",
         message_field="message",
     )
+
+
+# Columns known to contain inconsistent casing/formatting on purpose.
+# Currently just customers.region - see generate_synthetic_data.py.
+_MESSY_CATEGORICAL_COLUMNS = ("region",)
+
+
+def check_messy_categorical_filter(sql: str) -> str | None:
+    """Flag exact-match filters on columns known to have inconsistent
+    casing/formatting, where the comparison isn't normalized on both sides."""
+    for column in _MESSY_CATEGORICAL_COLUMNS:
+        # A normalization function (LOWER/UPPER/TRIM) directly wrapping the
+        # column means the query already accounts for casing/whitespace
+        # variance, so this pattern won't match - the column is followed by
+        # ")" rather than "=" at the point where we're looking for it.
+        match = re.search(
+            rf"\b(?:\w+\.)?{column}\b\s*=\s*'([^']*)'", sql, re.IGNORECASE
+        )
+        if not match:
+            continue
+
+        value = match.group(1)
+        return (
+            f"This query filters on '{column}' with an exact match "
+            f"({column} = '{value}'), but {column} contains inconsistent "
+            f"casing/formatting on purpose (e.g. 'West', 'west', 'WEST', and "
+            f"'W' all represent the same value - see "
+            f"generate_synthetic_data.py). An exact match like this will "
+            f"silently miss the other variants and undercount. Normalize both "
+            f"sides of the comparison, e.g. LOWER(TRIM({column})) = "
+            f"LOWER('{value}'), or explicitly account for all known variants."
+        )
+
+    return None

@@ -29,6 +29,7 @@ if str(BASE_DIR) not in sys.path:
 
 from guardrails.checks import (
     check_granularity_mismatch,
+    check_messy_categorical_filter,
     check_out_of_scope,
     check_undefined_metric,
 )
@@ -163,7 +164,15 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
         result["error"] = f"Failed to generate SQL: {e}"
         return result
 
-    result["warning"] = check_granularity_mismatch(sql)
+    warnings = [
+        w
+        for w in (
+            check_granularity_mismatch(sql),
+            check_messy_categorical_filter(sql),
+        )
+        if w
+    ]
+    result["warning"] = "\n\n".join(warnings) if warnings else None
 
     try:
         result["result"] = execute_sql_readonly(sql, db_path)
