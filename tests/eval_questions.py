@@ -9,9 +9,10 @@ land on:
   - "clarify" - should be caught by check_undefined_metric or
                 check_out_of_scope and short-circuit before SQL generation
                 (ask()["clarification_needed"] is populated).
-  - "warn"    - should still generate and execute SQL, but
-                check_granularity_mismatch should flag it
-                (ask()["warning"] is populated alongside a real result).
+  - "warn"    - should still generate and execute SQL, but either
+                check_granularity_mismatch or check_messy_categorical_filter
+                should flag it (ask()["warning"] is populated alongside a
+                real result).
 
 This file does not judge correctness - it records intent so a human (you)
 can compare it against what tests/run_eval.py actually produced. Several
@@ -129,19 +130,38 @@ EVAL_QUESTIONS = [
         "note": "Row-level orders joined to a monthly figure - same duplication problem phrased differently.",
     },
     # ------------------------------------------------------------------
-    # Edge cases: messy region casing, NULL channels, borderline phrasing.
+    # Messy categorical filter: region has inconsistent casing on purpose
+    # ('West'/'west'/'WEST'/'W' all mean the same thing), so an unnormalized
+    # exact-match filter on it silently undercounts. This is the specific
+    # bug check_messy_categorical_filter was added to catch (confirmed in
+    # testing: this exact question generated `region = 'West'` and returned
+    # 134, missing every other-case row).
     # ------------------------------------------------------------------
     {
         "question": "How many customers are in the West region?",
-        "category": "edge_case",
-        "expected_behavior": "answer",
+        "category": "messy_categorical_filter",
+        "expected_behavior": "warn",
         "note": (
-            "customers.region is deliberately messy ('West'/'west'/'WEST'/'W' all "
-            "occur - see generate_synthetic_data.py). A naive WHERE region = 'West' "
-            "will undercount. Check whether the generated SQL normalizes casing at "
-            "all - it's not required to, but worth eyeballing what it actually does."
+            "The motivating bug for check_messy_categorical_filter: generated "
+            "`WHERE region = 'West'` and returned 134, silently missing "
+            "'west'/'WEST'/'W' rows. Should now still answer, but with a warning."
         ),
     },
+    {
+        "question": "List customers in the East region.",
+        "category": "messy_categorical_filter",
+        "expected_behavior": "warn",
+        "note": "Same undernormalized-filter risk as the West-region question, different region and phrasing (list vs. count).",
+    },
+    {
+        "question": "How many customers signed up in the South region last year?",
+        "category": "messy_categorical_filter",
+        "expected_behavior": "warn",
+        "note": "Combines a region filter with a date filter - checks the guardrail still fires when region isn't the only WHERE clause.",
+    },
+    # ------------------------------------------------------------------
+    # Edge cases: NULL channels, borderline ranking/scope phrasing.
+    # ------------------------------------------------------------------
     {
         "question": "How many orders don't have a channel recorded?",
         "category": "edge_case",

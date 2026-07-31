@@ -22,6 +22,16 @@ from query_engine import ask
 COL_WIDTHS = {"num": 3, "category": 20, "expected": 10, "actual": 10, "question": 55}
 
 
+def _column_widths(rows: list[tuple]) -> dict:
+    """Widen the category column to fit the longest category name actually
+    present, so a category longer than the default (e.g.
+    "messy_categorical_filter") doesn't throw off table alignment."""
+    widths = dict(COL_WIDTHS)
+    longest_category = max((len(category) for _, category, *_ in rows), default=0)
+    widths["category"] = max(widths["category"], longest_category)
+    return widths
+
+
 def classify_outcome(result: dict) -> str:
     if result["error"]:
         return "ERROR"
@@ -38,22 +48,23 @@ def truncate(text: str, width: int) -> str:
 
 
 def print_summary_table(rows: list[tuple]) -> None:
+    widths = _column_widths(rows)
     header = (
-        f"{'#':<{COL_WIDTHS['num']}} "
-        f"{'Category':<{COL_WIDTHS['category']}} "
-        f"{'Expected':<{COL_WIDTHS['expected']}} "
-        f"{'Actual':<{COL_WIDTHS['actual']}} "
+        f"{'#':<{widths['num']}} "
+        f"{'Category':<{widths['category']}} "
+        f"{'Expected':<{widths['expected']}} "
+        f"{'Actual':<{widths['actual']}} "
         f"Question"
     )
     print(header)
     print("-" * len(header))
     for num, category, expected, actual, question in rows:
         print(
-            f"{num:<{COL_WIDTHS['num']}} "
-            f"{category:<{COL_WIDTHS['category']}} "
-            f"{expected:<{COL_WIDTHS['expected']}} "
-            f"{actual:<{COL_WIDTHS['actual']}} "
-            f"{truncate(question, COL_WIDTHS['question'])}"
+            f"{num:<{widths['num']}} "
+            f"{category:<{widths['category']}} "
+            f"{expected:<{widths['expected']}} "
+            f"{actual:<{widths['actual']}} "
+            f"{truncate(question, widths['question'])}"
         )
 
 
