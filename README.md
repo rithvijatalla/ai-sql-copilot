@@ -57,6 +57,9 @@ generate_synthetic_data.py   Generates the 4 tables and loads them into SQLite
 data/                        Generated CSVs (customers, orders, marketing_spend, support_tickets)
 db/analytics.db              Generated SQLite database (read-only at query time)
 
+app/
+  app.py                       Streamlit front-end — a thin UI over pipeline.query_engine.ask()
+
 pipeline/
   query_engine.py            Schema introspection, SQL generation, read-only execution, ask()
   test_basic.py               Manual smoke test — a few easy questions, prints question/SQL/result
@@ -128,7 +131,7 @@ answer at all as long as it's flagged.
 ## Setup
 
 ```bash
-pip install anthropic pandas faker pytest
+pip install anthropic pandas faker pytest streamlit
 ```
 
 Set your Anthropic API key. The pipeline reads it from the environment
@@ -152,6 +155,23 @@ python3 generate_synthetic_data.py
 ```
 
 ## Usage
+
+**Run the web app:**
+
+```bash
+set -a && source .env && set +a && python3 -m streamlit run app/app.py
+```
+
+This prints a local URL (typically `http://localhost:8501`) to open in your
+browser. It's a form with a question box and an "Ask" button, a sidebar with
+example questions covering each guardrail, and displays the generated SQL in
+a collapsible section alongside the result.
+
+Use `python3 -m streamlit run ...` rather than the bare `streamlit` command
+— on at least one tested setup the installed `streamlit` console script was
+broken (a stale entry point referencing `streamlit.cli`, a module the
+installed version no longer has). `python3 -m streamlit` invokes the package
+directly and sidesteps that.
 
 **Ask a one-off question:**
 
