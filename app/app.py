@@ -34,7 +34,7 @@ EXAMPLE_QUESTIONS = [
     ),
 ]
 
-st.set_page_config(page_title="AI SQL Analyst Copilot", layout="centered")
+st.set_page_config(page_title="AI SQL Copilot", page_icon="🧠", layout="centered")
 
 
 def render_setup_check() -> bool:
@@ -60,7 +60,7 @@ def render_setup_check() -> bool:
     return True
 
 
-st.title("AI SQL Analyst Copilot")
+st.title("🧠 AI SQL Analyst Copilot")
 st.markdown(
     "Ask a question in plain English about the analytics database "
     "(customers, orders, marketing spend, and support tickets). It "
@@ -81,9 +81,10 @@ with st.sidebar:
     )
     st.header("Example questions")
     st.markdown("Try one of these to see a specific behavior:")
-    for label, question in EXAMPLE_QUESTIONS:
+    for i, (label, question) in enumerate(EXAMPLE_QUESTIONS):
         st.markdown(f"**{label}**")
-        st.code(question, language=None)
+        if st.button(question, key=f"example_{i}"):
+            st.session_state["question_input"] = question
 
 ready = render_setup_check()
 
@@ -91,6 +92,7 @@ with st.form(key="ask_form"):
     question = st.text_input(
         "Ask a question",
         placeholder="e.g. What was total revenue in 2024?",
+        key="question_input",
     )
     submitted = st.form_submit_button("Ask", disabled=not ready)
 
