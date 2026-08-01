@@ -1,15 +1,20 @@
 # AI SQL Copilot
 
-A natural-language-to-SQL analyst copilot built on top of a small, deliberately
-messy synthetic analytics database. You ask a question in plain English; it
-generates a SQL query with Claude, runs it against a read-only SQLite
-database, and returns the result — while a set of guardrails catches the
-specific ways a technically-valid query can still be a misleading answer.
+A natural-language-to-SQL analyst copilot. You ask a question in plain
+English; it generates a SQL query with Claude, runs it against a read-only
+SQLite database, and returns the result — while a set of guardrails catches
+the specific ways a technically-valid query can still be a misleading
+answer.
 
-The "messiness" (inconsistent region casing, null marketing channels, a
-daily-vs-monthly grain mismatch between two tables) is intentional. The point
-of this project isn't just wiring an LLM up to a database — it's demonstrating
-what has to be true around that wiring for the answers to be trustworthy.
+It ships with a small, deliberately messy synthetic "demo dataset"
+(inconsistent region casing, null marketing channels, a daily-vs-monthly
+grain mismatch between two tables) so the guardrails have something to catch
+out of the box. You can also upload your own CSV/Excel file(s) instead — the
+schema, the SQL generation, and all four guardrails are fully data-driven and
+don't hardcode anything about the demo dataset's table or column names. The
+point of this project isn't just wiring an LLM up to a database — it's
+demonstrating what has to be true around that wiring for the answers to be
+trustworthy, on whatever data you point it at.
 
 ## How it works
 
@@ -17,16 +22,16 @@ what has to be true around that wiring for the answers to be trustworthy.
 question
    │
    ▼
-check_undefined_metric / check_out_of_scope   (pre-generation guardrails)
-   │  clarification needed? → stop here, ask the user instead
-   ▼
-get_schema_description()                      (reads live schema from SQLite)
+get_schema_description()                      (reads live schema from the active SQLite db - demo or uploaded)
    │
+   ▼
+check_undefined_metric / check_out_of_scope   (pre-generation guardrails, grounded in the active schema)
+   │  clarification needed? → stop here, ask the user instead
    ▼
 generate_sql()                                 (Claude → SQL SELECT statement)
    │
    ▼
-check_granularity_mismatch / check_messy_categorical_filter   (post-generation guardrails)
+check_granularity_mismatch / check_messy_categorical_filter   (post-generation guardrails, sample the active data)
    │  issue found? → still execute, but attach a warning
    ▼
 execute_sql_readonly()                         (runs against a read-only connection)
@@ -53,20 +58,23 @@ Neither layer trusts the layer before it.
 ## Project structure
 
 ```
-generate_synthetic_data.py   Generates the 4 tables and loads them into SQLite
+generate_synthetic_data.py   Generates the 4 demo tables and loads them into SQLite
 data/                        Generated CSVs (customers, orders, marketing_spend, support_tickets)
-db/analytics.db              Generated SQLite database (read-only at query time)
+db/analytics.db              Generated demo SQLite database (read-only at query time)
 
 app/
-  app.py                       Streamlit front-end — a thin UI over pipeline.query_engine.ask()
+  app.py                       Streamlit front-end — demo/upload toggle over pipeline.query_engine.ask()
 
 pipeline/
-  query_engine.py            Schema introspection, SQL generation, read-only execution, ask()
+  query_engine.py            SQL generation, read-only execution, ask() (wires schema + guardrails together)
+  schema_utils.py             Schema introspection (get_schema_description, etc.) — works against any SQLite file
+  data_loader.py               Loads uploaded CSV/Excel files into a fresh temp SQLite database
   test_basic.py               Manual smoke test — a few easy questions, prints question/SQL/result
 
 guardrails/
-  checks.py                   The 4 guardrail checks (see below)
-  test_checks.py               Automated tests: deterministic for the static checks,
+  checks.py                   The 4 guardrail checks (see below) — all data-driven, no hardcoded schema
+  test_checks.py               Automated tests: deterministic for the static checks (against both the
+                                demo dataset and a second, differently-shaped synthetic dataset),
                                 mocked-LLM + live-LLM for the two model-backed checks
 
 tests/
@@ -77,6 +85,10 @@ tests/
 ```
 
 ## The data
+
+You can either use the bundled demo dataset or upload your own CSV/Excel
+file(s) in the app — see [Bring your own data](#bring-your-own-data) below.
+The rest of this section describes the demo dataset specifically.
 
 `generate_synthetic_data.py` builds four related tables with a fixed random
 seed (42), reproducible on every run:
@@ -109,18 +121,30 @@ python3 generate_synthetic_data.py
 
 ## The guardrails
 
+All four guardrails are **data-driven**: none of them hardcode a table or
+column name. They introspect and sample whichever database is active — the
+demo dataset or an uploaded one — at check time.
+
 | Check | Runs | Method | Catches |
 |---|---|---|---|
-| `check_undefined_metric` | before SQL generation | LLM judgment | Ranking language ("top", "best", "leading") with no metric specified — the generator would otherwise silently pick one. |
-| `check_out_of_scope` | before SQL generation | LLM judgment | Unbounded dumps ("show me everything") or full per-row detail requested with no filter or aggregation. |
-| `check_granularity_mismatch` | after SQL generation | static regex | Queries that combine `orders` and `marketing_spend` without an aggregation that reconciles the daily/monthly grain mismatch. |
-| `check_messy_categorical_filter` | after SQL generation | static regex | Exact-match filters on `region` (e.g. `region = 'West'`) that don't normalize casing, and so silently undercount. |
+| `check_undefined_metric` | before SQL generation | LLM judgment, grounded in the active schema | Ranking language ("top", "best", "leading") with no metric specified — the generator would otherwise silently pick one. |
+| `check_out_of_scope` | before SQL generation | LLM judgment, grounded in the active schema | Unbounded dumps ("show me everything") or full per-row detail requested with no filter or aggregation. |
+| `check_granularity_mismatch` | after SQL generation | static SQL analysis + data sample | Queries that join two tables whose date columns have different *estimated* grains (daily/weekly/monthly, inferred from the minimum gap between each table's sorted distinct dates) without an aggregation that reconciles them. |
+| `check_messy_categorical_filter` | after SQL generation | static SQL analysis + data sample | Exact-match filters (e.g. `region = 'West'`) on a column whose *actual distinct values* contain case/whitespace variants that collapse to the same normalized value — auto-detected per column, not limited to `region`. |
 
 The two LLM-backed checks need semantic judgment — "top 5 customers by
 revenue" and "top 5 customers" differ only in whether a metric appears
-further in the sentence, which a keyword blocklist can't tell apart. The two
-static checks are schema-level facts about specific columns/tables, so a
-regex is faster, cheaper, and just as reliable as a model call.
+further in the sentence, which a keyword blocklist can't tell apart. Their
+system prompts are passed the active schema description so clarifying
+questions and scoping suggestions name real tables/columns from whatever
+dataset is loaded, rather than a fixed example schema.
+
+The two post-generation checks are static analysis over the generated SQL
+(which tables it joins, which columns it filters on with an unnormalized
+exact match) combined with a small data sample from the active database —
+enough to estimate a table's date grain or detect that a column has
+inconsistent casing, without needing a model call. See the module docstring
+in `guardrails/checks.py` for the detection algorithm in full.
 
 Pre-generation checks short-circuit the pipeline entirely (`sql` stays
 `None`, `clarification_needed` is populated). Post-generation checks don't
@@ -131,8 +155,10 @@ answer at all as long as it's flagged.
 ## Setup
 
 ```bash
-pip install anthropic pandas faker pytest streamlit
+pip install anthropic pandas faker pytest streamlit openpyxl
 ```
+
+(`openpyxl` is only needed to read uploaded `.xlsx`/`.xls` files.)
 
 Set your Anthropic API key. The pipeline reads it from the environment
 (`anthropic.Anthropic()` looks for `ANTHROPIC_API_KEY`):
@@ -163,15 +189,37 @@ set -a && source .env && set +a && python3 -m streamlit run app/app.py
 ```
 
 This prints a local URL (typically `http://localhost:8501`) to open in your
-browser. It's a form with a question box and an "Ask" button, a sidebar with
-example questions covering each guardrail, and displays the generated SQL in
-a collapsible section alongside the result.
+browser. At the top, a "Data source" toggle switches between the demo
+dataset and your own upload; below that is a form with a question box and an
+"Ask" button, and the generated SQL is shown in a collapsible section
+alongside the result. In demo mode, the sidebar also shows example questions
+covering each guardrail.
 
 Use `python3 -m streamlit run ...` rather than the bare `streamlit` command
 — on at least one tested setup the installed `streamlit` console script was
 broken (a stale entry point referencing `streamlit.cli`, a module the
 installed version no longer has). `python3 -m streamlit` invokes the package
 directly and sidesteps that.
+
+### Bring your own data
+
+Switch the app's "Data source" toggle to "Upload your own data" and drop in
+one or more `.csv`/`.xlsx`/`.xls` files. Each file becomes a table (each
+sheet of a multi-sheet Excel file becomes its own table); the table name is
+the filename (or `filename_sheetname`), sanitized to a valid SQL identifier
+(lowercased, non-alphanumeric characters replaced with `_`, de-duplicated on
+collision). The files are loaded into a fresh temporary SQLite database via
+`pandas.read_csv`/`read_excel` + `to_sql` — nothing is written into the
+repo's `db/` directory, and the temp file is deleted when you switch back to
+the demo dataset or upload a different set of files.
+
+Once loaded, an expander shows the detected schema (table names, column
+names, inferred SQLite types), and questions are answered against that
+database exactly like the demo dataset — including all four guardrails,
+which re-run their table/column/date-grain detection against whatever you
+uploaded. The demo dataset's example question buttons are demo-only (they
+reference `region`, `orders`, `marketing_spend`, etc. by name) and are
+hidden in upload mode.
 
 **Ask a one-off question:**
 
@@ -196,6 +244,12 @@ python3 -m pytest guardrails/test_checks.py -v
 
 The static-check and mocked-LLM tests run instantly with no API key. The
 live-LLM tests are skipped automatically unless `ANTHROPIC_API_KEY` is set.
+Most static checks run against the bundled demo database by default; a
+second in-memory dataset (the `alt_db_path` fixture — different table/column
+names, a different messy column, a daily-vs-weekly rather than
+daily-vs-monthly grain mismatch) is built on the fly to confirm the
+detection is genuinely data-driven rather than still secretly keyed to the
+demo dataset's names.
 
 **Run the full manual evaluation** (~20 questions across every guardrail
 category, printed as a summary table plus full detail for you to grade

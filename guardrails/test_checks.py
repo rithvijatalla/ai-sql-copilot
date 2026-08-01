@@ -1,9 +1,14 @@
 """
 Tests for guardrails/checks.py.
 
-check_granularity_mismatch and check_messy_categorical_filter are pure text
-inspection, so they're tested directly against real SQL strings - no
-mocking needed.
+check_granularity_mismatch and check_messy_categorical_filter are static SQL
+inspection plus a data sample, so most of them run against the bundled demo
+database (db/analytics.db, via each function's default db_path) with real
+SQL strings - no mocking needed. A second dataset ("alt_db_path" fixture,
+different table/column names, a different messy column, and a
+daily-vs-weekly rather than daily-vs-monthly grain mismatch) checks that the
+detection is genuinely data-driven and not secretly still keyed to
+"region"/"orders"/"marketing_spend".
 
 check_undefined_metric and check_out_of_scope call an LLM. Their parsing and
 tool-forcing wiring is tested against a mocked Anthropic client (fast,
@@ -13,8 +18,10 @@ can't - those are skipped automatically when ANTHROPIC_API_KEY isn't set.
 """
 
 import os
+import sqlite3
 import sys
 import types
+from datetime import date, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +35,7 @@ from guardrails.checks import (
     check_out_of_scope,
     check_undefined_metric,
 )
+from pipeline.schema_utils import get_schema_description
 
 requires_api_key = pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"),
@@ -163,6 +171,101 @@ def test_messy_categorical_filter_ignores_queries_without_region_filter():
 
 
 # ---------------------------------------------------------------------------
+# Generalized detection on a second, differently-shaped dataset - proves the
+# checks are data-driven rather than secretly still keyed to
+# "region"/"orders"/"marketing_spend".
+#
+# Tables: "sales" (messy "store_area" column, analogous to customers.region
+# but a different name), "transactions" (daily grain), "weekly_targets"
+# (weekly grain, not monthly - a different mismatch shape than the demo
+# dataset's daily-vs-monthly one).
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def alt_db_path(tmp_path):
+    db_path = str(tmp_path / "alt.db")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            "CREATE TABLE sales (sale_id INTEGER PRIMARY KEY, store_area TEXT NOT NULL, amount REAL NOT NULL)"
+        )
+        store_area_variants = ["Downtown", "downtown", "DOWNTOWN", "Suburbs", "suburbs", "Suburbs"]
+        conn.executemany(
+            "INSERT INTO sales (store_area, amount) VALUES (?, ?)",
+            [(variant, 100.0 + i) for i, variant in enumerate(store_area_variants)],
+        )
+
+        conn.execute(
+            "CREATE TABLE transactions (txn_id INTEGER PRIMARY KEY, txn_date TEXT NOT NULL, store_area TEXT NOT NULL)"
+        )
+        start = date(2024, 1, 1)
+        conn.executemany(
+            "INSERT INTO transactions (txn_date, store_area) VALUES (?, ?)",
+            [((start + timedelta(days=i)).isoformat(), "Downtown") for i in range(30)],
+        )
+
+        conn.execute(
+            "CREATE TABLE weekly_targets (target_id INTEGER PRIMARY KEY, week_start TEXT NOT NULL, "
+            "store_area TEXT NOT NULL, target_amount REAL NOT NULL)"
+        )
+        conn.executemany(
+            "INSERT INTO weekly_targets (week_start, store_area, target_amount) VALUES (?, ?, ?)",
+            [((start + timedelta(weeks=i)).isoformat(), "Downtown", 1000.0) for i in range(8)],
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path
+
+
+def test_messy_categorical_filter_generalizes_to_arbitrary_column(alt_db_path):
+    sql = "SELECT COUNT(*) FROM sales WHERE store_area = 'Downtown'"
+    warning = check_messy_categorical_filter(sql, alt_db_path)
+    assert warning is not None
+    assert "sales" in warning
+    assert "store_area" in warning
+
+
+def test_messy_categorical_filter_allows_normalized_comparison_on_alt_dataset(alt_db_path):
+    sql = "SELECT COUNT(*) FROM sales WHERE LOWER(store_area) = 'downtown'"
+    assert check_messy_categorical_filter(sql, alt_db_path) is None
+
+
+def test_messy_categorical_filter_ignores_clean_column_on_alt_dataset(alt_db_path):
+    # store_area is messy on transactions too (same column, same table-scan
+    # logic), but amount/target_amount-style numeric columns never match the
+    # text-column path at all - use a filter on a table without any messy
+    # text column to confirm clean data isn't flagged.
+    sql = "SELECT COUNT(*) FROM weekly_targets WHERE week_start = '2024-01-01'"
+    assert check_messy_categorical_filter(sql, alt_db_path) is None
+
+
+def test_granularity_mismatch_generalizes_to_daily_vs_weekly(alt_db_path):
+    sql = (
+        "SELECT t.txn_date, w.target_amount FROM transactions t "
+        "JOIN weekly_targets w ON t.store_area = w.store_area"
+    )
+    warning = check_granularity_mismatch(sql, alt_db_path)
+    assert warning is not None
+    assert "transactions" in warning
+    assert "weekly_targets" in warning
+
+
+def test_granularity_mismatch_allows_reconciled_daily_vs_weekly(alt_db_path):
+    sql = (
+        "SELECT strftime('%Y-%W', t.txn_date) AS week, w.target_amount "
+        "FROM transactions t JOIN weekly_targets w ON t.store_area = w.store_area "
+        "GROUP BY week"
+    )
+    assert check_granularity_mismatch(sql, alt_db_path) is None
+
+
+def test_granularity_mismatch_ignores_single_table_on_alt_dataset(alt_db_path):
+    assert check_granularity_mismatch("SELECT * FROM transactions", alt_db_path) is None
+
+
+# ---------------------------------------------------------------------------
 # check_undefined_metric - mocked LLM
 # ---------------------------------------------------------------------------
 
@@ -204,6 +307,19 @@ def test_undefined_metric_forces_the_correct_tool():
         _, kwargs = mock_anthropic.return_value.messages.create.call_args
     assert kwargs["tool_choice"] == {"type": "tool", "name": "report_metric_check"}
     assert kwargs["tools"][0]["name"] == "report_metric_check"
+
+
+def test_undefined_metric_grounds_prompt_in_active_schema_when_provided():
+    with patch("guardrails.checks.anthropic.Anthropic") as mock_anthropic:
+        _mock_response(
+            mock_anthropic,
+            [_tool_use_block({"needs_clarification": False, "clarifying_question": ""})],
+        )
+        check_undefined_metric(
+            "Top 5 stores by revenue", schema_description="Table: sales\n  - amount: REAL"
+        )
+        _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    assert "Table: sales" in kwargs["system"]
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +366,17 @@ def test_out_of_scope_forces_the_correct_tool():
     assert kwargs["tools"][0]["name"] == "report_scope_check"
 
 
+def test_out_of_scope_grounds_prompt_in_active_schema_when_provided():
+    with patch("guardrails.checks.anthropic.Anthropic") as mock_anthropic:
+        _mock_response(
+            mock_anthropic,
+            [_tool_use_block({"needs_scoping": False, "message": ""})],
+        )
+        check_out_of_scope("List sales in Downtown", schema_description="Table: sales\n  - amount: REAL")
+        _, kwargs = mock_anthropic.return_value.messages.create.call_args
+    assert "Table: sales" in kwargs["system"]
+
+
 # ---------------------------------------------------------------------------
 # Live-model tests - real semantic judgment, skipped without an API key
 # ---------------------------------------------------------------------------
@@ -283,3 +410,35 @@ def test_live_out_of_scope_flags_full_detail_request():
 @requires_api_key
 def test_live_out_of_scope_passes_filtered_request():
     assert check_out_of_scope("List customers in the West region") is None
+
+
+# ---------------------------------------------------------------------------
+# Live-model tests on the alt (non-demo) schema - confirms the two LLM-backed
+# checks reason correctly when grounded in an arbitrary uploaded schema
+# rather than the hardcoded customers/orders/marketing_spend/support_tickets
+# schema they were originally validated against.
+# ---------------------------------------------------------------------------
+
+
+@requires_api_key
+def test_live_undefined_metric_flags_bare_ranking_question_on_alt_schema(alt_db_path):
+    schema = get_schema_description(alt_db_path)
+    assert check_undefined_metric("Which store area performs best?", schema) is not None
+
+
+@requires_api_key
+def test_live_undefined_metric_passes_when_metric_is_specified_on_alt_schema(alt_db_path):
+    schema = get_schema_description(alt_db_path)
+    assert check_undefined_metric("Which store area has the highest total sales amount?", schema) is None
+
+
+@requires_api_key
+def test_live_out_of_scope_flags_unbounded_dump_on_alt_schema(alt_db_path):
+    schema = get_schema_description(alt_db_path)
+    assert check_out_of_scope("Show me everything in this database.", schema) is not None
+
+
+@requires_api_key
+def test_live_out_of_scope_passes_filtered_request_on_alt_schema(alt_db_path):
+    schema = get_schema_description(alt_db_path)
+    assert check_out_of_scope("List sales in the Downtown store area.", schema) is None

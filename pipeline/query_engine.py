@@ -12,7 +12,6 @@ single SELECT/WITH statement, on a connection SQLite physically cannot write
 through (URI "?mode=ro"). Neither layer trusts the other.
 """
 
-import os
 import re
 import sqlite3
 import sys
@@ -22,7 +21,6 @@ import anthropic
 import pandas as pd
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_DB_PATH = str(BASE_DIR / "db" / "analytics.db")
 
 if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
@@ -33,6 +31,7 @@ from guardrails.checks import (
     check_out_of_scope,
     check_undefined_metric,
 )
+from pipeline.schema_utils import DEFAULT_DB_PATH, get_schema_description
 
 MODEL = "claude-sonnet-4-6"
 
@@ -51,32 +50,6 @@ Rules:
 - Use only the tables and columns given in the schema.
 - Output a single statement, not multiple statements separated by semicolons.
 """
-
-
-def get_schema_description(db_path: str = DEFAULT_DB_PATH) -> str:
-    """Return a text description of every table and column in the database."""
-    conn = sqlite3.connect(db_path)
-    try:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type = 'table' "
-            "AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        )
-        table_names = [row[0] for row in cursor.fetchall()]
-
-        lines = []
-        for table_name in table_names:
-            cursor.execute(f"PRAGMA table_info('{table_name}')")
-            columns = cursor.fetchall()
-            lines.append(f"Table: {table_name}")
-            for _, col_name, col_type, _, _, is_pk in columns:
-                marker = " (PRIMARY KEY)" if is_pk else ""
-                lines.append(f"  - {col_name}: {col_type}{marker}")
-            lines.append("")
-
-        return "\n".join(lines).strip()
-    finally:
-        conn.close()
 
 
 def generate_sql(question: str, schema_description: str) -> str:
@@ -142,19 +115,21 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
     }
 
     try:
-        clarification = check_undefined_metric(question) or check_out_of_scope(question)
+        schema_description = get_schema_description(db_path)
+    except sqlite3.Error as e:
+        result["error"] = f"Failed to read schema: {e}"
+        return result
+
+    try:
+        clarification = check_undefined_metric(
+            question, schema_description
+        ) or check_out_of_scope(question, schema_description)
     except (anthropic.AnthropicError, TypeError) as e:
         result["error"] = f"Guardrail check failed: {e}"
         return result
 
     if clarification:
         result["clarification_needed"] = clarification
-        return result
-
-    try:
-        schema_description = get_schema_description(db_path)
-    except sqlite3.Error as e:
-        result["error"] = f"Failed to read schema: {e}"
         return result
 
     try:
@@ -167,8 +142,8 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
     warnings = [
         w
         for w in (
-            check_granularity_mismatch(sql),
-            check_messy_categorical_filter(sql),
+            check_granularity_mismatch(sql, db_path),
+            check_messy_categorical_filter(sql, db_path),
         )
         if w
     ]

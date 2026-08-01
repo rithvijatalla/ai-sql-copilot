@@ -2,7 +2,10 @@
 Guardrail checks for the NL-to-SQL analyst copilot.
 
 Each check catches a specific way a question or generated query can produce
-a technically-valid but misleading or unsafe answer:
+a technically-valid but misleading or unsafe answer. All four are
+schema-agnostic: they introspect whichever database is active (the bundled
+demo dataset or a dynamically uploaded one) rather than hardcoding table or
+column names.
 
 1. check_undefined_metric (pre-generation, LLM judgment)
    Ranking language ("top", "best", "leading", ...) is meaningless without a
@@ -11,44 +14,53 @@ a technically-valid but misleading or unsafe answer:
    a confident-looking answer to a question they didn't actually ask. This
    needs an LLM rather than keyword matching because "top 5 customers by
    revenue" and "top 5 customers" differ only in whether a metric is present
-   further in the sentence - a real semantic read, not a regex.
+   further in the sentence - a real semantic read, not a regex. The active
+   schema is passed in so clarifying-question suggestions name real columns
+   from the active dataset instead of a fixed example schema.
 
-2. check_granularity_mismatch (post-generation, static analysis)
-   orders is daily grain; marketing_spend is monthly grain (see
-   generate_synthetic_data.py's docstring - this mismatch is intentional in
-   the data). A query that touches both tables without reconciling the grain
-   (e.g. grouping orders by month before comparing to spend) will join or
-   aggregate across mismatched row granularities, which silently
-   double-counts or misaligns values. This is caught by inspecting the SQL
-   text - a schema-level fact about these two specific tables, not something
-   that needs a model call.
+2. check_granularity_mismatch (post-generation, static analysis + data sample)
+   When the generated SQL joins two tables, find a date/timestamp-like
+   column in each (by declared type, column name, or by sampling values and
+   checking how many parse as dates), sample distinct values from that
+   column, and estimate the table's grain from the minimum gap between
+   consecutive sorted distinct dates (~1 day = daily, ~7 = weekly, else
+   monthly). If the two joined tables' estimated grains differ and the SQL
+   doesn't group by a date-truncation of the finer-grained side, flag it -
+   the query is likely to double-count or misalign rows across the mismatch.
+   This generalizes what was originally a hardcoded fact about `orders`
+   (daily) vs `marketing_spend` (monthly) - see generate_synthetic_data.py.
 
 3. check_out_of_scope (pre-generation, LLM judgment)
    Requests for unbounded dumps ("show me everything") or full per-row
-   customer detail without aggregation are a scoping problem, not a SQL
-   problem: they don't have a wrong answer so much as an answer nobody
-   actually wants to receive as a flat table, and they're the shape of
-   request most likely to leak more row-level detail than intended. Like
-   check_undefined_metric, this needs semantic judgment ("list all customers
-   in the West region" is a normal filtered query; "list all customers with
-   full details" is not) rather than a keyword blocklist.
+   detail without aggregation are a scoping problem, not a SQL problem: they
+   don't have a wrong answer so much as an answer nobody actually wants to
+   receive as a flat table, and they're the shape of request most likely to
+   leak more row-level detail than intended. Like check_undefined_metric,
+   this needs semantic judgment rather than a keyword blocklist, and takes
+   the active schema so its reasoning and examples aren't tied to one fixed
+   set of table names.
 
-4. check_messy_categorical_filter (post-generation, static analysis)
-   customers.region contains inconsistent values on purpose ("West",
-   "west", "WEST", "W" all mean the same thing - see
-   generate_synthetic_data.py's docstring). This was caught in testing:
-   "How many customers are in the West region?" generated
-   `WHERE region = 'West'` and returned 134 - a real number that silently
-   excludes every "west"/"WEST"/"W" row. Like check_granularity_mismatch,
-   this is a known fact about one specific column's data quality, not
-   something that needs semantic judgment - a regex for an unnormalized
-   exact-match comparison on that column is sufficient and faster/cheaper
-   than a model call.
+4. check_messy_categorical_filter (post-generation, static analysis + data
+   sample)
+   Scans every exact-match filter (`column = 'value'`, not wrapped in a
+   normalizing function) in the generated SQL. For each one, samples the
+   distinct values of that column from the active database and checks
+   whether any two raw values collapse to the same case/whitespace-
+   normalized form (e.g. "West"/"west"/"WEST"). If so, the column is
+   "messy" and the exact-match filter will silently miss the other variants
+   and undercount. This generalizes what was originally hardcoded to
+   customers.region (see generate_synthetic_data.py) to any text column in
+   any uploaded dataset.
 """
 
+import itertools
 import re
+import sqlite3
 
 import anthropic
+import pandas as pd
+
+from pipeline.schema_utils import DEFAULT_DB_PATH, get_table_columns, get_table_names
 
 MODEL = "claude-sonnet-4-6"
 
@@ -100,9 +112,16 @@ def _run_judgment(
     return None
 
 
-def check_undefined_metric(question: str) -> str | None:
+def check_undefined_metric(question: str, schema_description: str | None = None) -> str | None:
     """Flag ranking/superlative questions that don't specify what to rank by."""
-    system_prompt = """You review questions asked to an analytics SQL copilot.
+    schema_hint = (
+        f"\n\nThe active database schema, for grounding metric suggestions in "
+        f"real columns:\n{schema_description}"
+        if schema_description
+        else ""
+    )
+
+    system_prompt = f"""You review questions asked to an analytics SQL copilot.
 
 Determine whether the question uses ranking or superlative language (e.g.
 "top", "best", "worst", "highest", "lowest", "leading", "greatest") WITHOUT
@@ -115,11 +134,12 @@ revenue", "worst month for support tickets"), there is no problem.
 If ranking language is used but no metric is specified or implied ("top
 customers", "best region", "leading channel"), flag it and draft a short
 clarifying question to ask the user, naming 2-3 plausible metric options
-from the schema (customers, orders/revenue, marketing_spend, support_tickets)
-that would fit the question.
+that would fit the question. Ground those options in real, numeric-looking
+columns from the schema below if one is provided; otherwise suggest
+generically-plausible metrics.
 
 If the question doesn't use ranking/superlative language at all, there is no
-problem."""
+problem.{schema_hint}"""
 
     return _run_judgment(
         system_prompt=system_prompt,
@@ -131,43 +151,20 @@ problem."""
     )
 
 
-def check_granularity_mismatch(sql: str) -> str | None:
-    """Flag SQL that mixes orders (daily grain) and marketing_spend (monthly
-    grain) without an aggregation that reconciles the two."""
-    has_orders = bool(re.search(r"\borders\b", sql, re.IGNORECASE))
-    has_marketing_spend = bool(re.search(r"\bmarketing_spend\b", sql, re.IGNORECASE))
-
-    if not (has_orders and has_marketing_spend):
-        return None
-
-    has_group_by = bool(re.search(r"\bgroup\s+by\b", sql, re.IGNORECASE))
-    has_month_alignment = bool(
-        re.search(r"strftime\s*\(\s*['\"]%Y-%m['\"]", sql, re.IGNORECASE)
-        or re.search(r"substr\s*\(\s*[\w.]*order_date\s*,\s*1\s*,\s*7\s*\)", sql, re.IGNORECASE)
-    )
-
-    if has_group_by and has_month_alignment:
-        return None
-
-    return (
-        "This query combines 'orders' (daily grain) with 'marketing_spend' "
-        "(monthly grain) without an aggregation that reconciles the two - e.g. "
-        "grouping orders by month (strftime('%Y-%m', order_date)) before "
-        "comparing to marketing_spend. Results may double-count or misalign "
-        "values across the mismatched grains."
-    )
-
-
-def check_out_of_scope(question: str) -> str | None:
+def check_out_of_scope(question: str, schema_description: str | None = None) -> str | None:
     """Flag requests for unbounded data dumps or ungrouped per-row detail."""
-    system_prompt = """You review questions asked to an analytics SQL copilot
-over a database of customers, orders, marketing_spend, and support_tickets.
+    schema_hint = (
+        f"\n\nThe active database schema:\n{schema_description}" if schema_description else ""
+    )
+
+    system_prompt = f"""You review questions asked to an analytics SQL copilot
+over a tabular analytics database.
 
 Determine whether the question asks for an unbounded, comprehensive data
 dump (e.g. "show me everything", "list all the data", "dump the whole
 database") or for individual-level, non-aggregated detail across an entire
-table with no filtering or summarization (e.g. "list all customers with
-full details", "give me every order for every customer").
+table with no filtering or summarization (e.g. "list every row with full
+details", "give me every record for every entity").
 
 A filtered or aggregated request is fine, even if it returns many rows
 ("list customers in the West region", "show all orders from December",
@@ -176,9 +173,10 @@ bound, filter, or aggregation at all.
 
 If the question is out of scope this way, flag it and draft a short message
 explaining that it needs to be scoped down (e.g. by adding a filter, a time
-range, a limit, or an aggregation), with a concrete suggestion.
+range, a limit, or an aggregation), with a concrete suggestion grounded in
+the schema below if one is provided.
 
-Otherwise there is no problem."""
+Otherwise there is no problem.{schema_hint}"""
 
     return _run_judgment(
         system_prompt=system_prompt,
@@ -190,35 +188,224 @@ Otherwise there is no problem."""
     )
 
 
-# Columns known to contain inconsistent casing/formatting on purpose.
-# Currently just customers.region - see generate_synthetic_data.py.
-_MESSY_CATEGORICAL_COLUMNS = ("region",)
+# ---------------------------------------------------------------------------
+# check_granularity_mismatch - static SQL analysis + data-driven grain
+# estimation
+# ---------------------------------------------------------------------------
+
+_DATE_NAME_HINTS = (
+    "date",
+    "time",
+    "month",
+    "week",
+    "day",
+    "year",
+    "created",
+    "updated",
+)
 
 
-def check_messy_categorical_filter(sql: str) -> str | None:
-    """Flag exact-match filters on columns known to have inconsistent
-    casing/formatting, where the comparison isn't normalized on both sides."""
-    for column in _MESSY_CATEGORICAL_COLUMNS:
-        # A normalization function (LOWER/UPPER/TRIM) directly wrapping the
-        # column means the query already accounts for casing/whitespace
-        # variance, so this pattern won't match - the column is followed by
-        # ")" rather than "=" at the point where we're looking for it.
-        match = re.search(
-            rf"\b(?:\w+\.)?{column}\b\s*=\s*'([^']*)'", sql, re.IGNORECASE
+def _looks_like_date_type(declared_type: str) -> bool:
+    return any(hint in (declared_type or "").upper() for hint in ("DATE", "TIME"))
+
+
+def _looks_like_date_name(column_name: str) -> bool:
+    lowered = column_name.lower()
+    return any(hint in lowered for hint in _DATE_NAME_HINTS)
+
+
+def _sample_column_values(db_path: str, table: str, column: str, limit: int = 500) -> list:
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            f'SELECT DISTINCT "{column}" FROM "{table}" WHERE "{column}" IS NOT NULL LIMIT {limit}'
         )
-        if not match:
+        return [row[0] for row in cursor.fetchall()]
+    finally:
+        conn.close()
+
+
+def _parses_as_date(values: list, threshold: float = 0.9) -> bool:
+    if not values:
+        return False
+    parsed = pd.to_datetime(pd.Series(values, dtype="object"), errors="coerce", format="mixed")
+    return parsed.notna().mean() >= threshold
+
+
+def _find_date_column(db_path: str, table: str) -> str | None:
+    """Return the best-guess date/timestamp column for a table, preferring a
+    DATE/TIME-typed or date-hinted column name, falling back to sampling
+    values and checking how many parse as dates."""
+    columns = get_table_columns(db_path, table)
+
+    by_type_or_name = [
+        col_name
+        for col_name, col_type, _ in columns
+        if _looks_like_date_type(col_type) or _looks_like_date_name(col_name)
+    ]
+    for col_name in by_type_or_name:
+        values = _sample_column_values(db_path, table, col_name)
+        if _parses_as_date(values):
+            return col_name
+
+    for col_name, col_type, is_pk in columns:
+        if is_pk or col_name in by_type_or_name or (col_type or "").upper() == "INTEGER":
+            continue
+        values = _sample_column_values(db_path, table, col_name)
+        if _parses_as_date(values):
+            return col_name
+
+    return None
+
+
+def _estimate_grain(db_path: str, table: str, column: str) -> str | None:
+    """Estimate a table's date grain from the minimum gap between
+    consecutive sorted distinct values of its date column."""
+    raw_values = _sample_column_values(db_path, table, column)
+    dates = pd.to_datetime(pd.Series(raw_values, dtype="object"), errors="coerce", format="mixed")
+    distinct_sorted = dates.dropna().drop_duplicates().sort_values()
+    if len(distinct_sorted) < 2:
+        return None
+
+    min_gap_days = distinct_sorted.diff().dropna().dt.days.min()
+    if min_gap_days <= 1:
+        return "daily"
+    if min_gap_days <= 7:
+        return "weekly"
+    return "monthly"
+
+
+def _referenced_tables(sql: str, db_path: str) -> list[str]:
+    return [
+        table
+        for table in get_table_names(db_path)
+        if re.search(rf"\b{re.escape(table)}\b", sql, re.IGNORECASE)
+    ]
+
+
+def _has_reconciling_aggregation(sql: str) -> bool:
+    """True if the SQL groups by something and also truncates a date to a
+    coarser bucket (strftime/substr/date_trunc) - a signal the finer-grained
+    side was rolled up before comparison, rather than joined raw."""
+    has_group_by = bool(re.search(r"\bgroup\s+by\b", sql, re.IGNORECASE))
+    has_date_truncation = bool(
+        re.search(r"\bstrftime\s*\(", sql, re.IGNORECASE)
+        or re.search(r"\bsubstr\s*\(\s*[\w.]+\s*,\s*1\s*,\s*\d+\s*\)", sql, re.IGNORECASE)
+        or re.search(r"\bdate_trunc\s*\(", sql, re.IGNORECASE)
+    )
+    return has_group_by and has_date_truncation
+
+
+def check_granularity_mismatch(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
+    """Flag SQL that joins two tables with different estimated date grains
+    (e.g. daily vs. monthly) without an aggregation that reconciles them."""
+    tables = _referenced_tables(sql, db_path)
+    has_join = bool(re.search(r"\bjoin\b", sql, re.IGNORECASE))
+    if len(tables) < 2 or not has_join:
+        return None
+
+    table_grains: dict[str, tuple[str, str]] = {}
+    for table in tables:
+        date_column = _find_date_column(db_path, table)
+        if not date_column:
+            continue
+        grain = _estimate_grain(db_path, table, date_column)
+        if grain:
+            table_grains[table] = (date_column, grain)
+
+    if _has_reconciling_aggregation(sql):
+        return None
+
+    for (table_a, (col_a, grain_a)), (table_b, (col_b, grain_b)) in itertools.combinations(
+        table_grains.items(), 2
+    ):
+        if grain_a != grain_b:
+            return (
+                f"This query joins '{table_a}' ({grain_a} grain, via "
+                f"{table_a}.{col_a}) with '{table_b}' ({grain_b} grain, via "
+                f"{table_b}.{col_b}) without an aggregation that reconciles "
+                f"the two - e.g. grouping the finer-grained side by a "
+                f"truncated date (strftime/substr) before comparing. Results "
+                f"may double-count or misalign values across the mismatched "
+                f"grains."
+            )
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# check_messy_categorical_filter - static SQL analysis + data-driven
+# messiness detection
+# ---------------------------------------------------------------------------
+
+_EXACT_MATCH_FILTER = re.compile(r"\b(?:(\w+)\.)?(\w+)\s*=\s*'([^']*)'")
+
+
+def _normalize_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip().lower())
+
+
+def _is_text_type(declared_type: str) -> bool:
+    upper = (declared_type or "").upper()
+    return upper == "" or "CHAR" in upper or "TEXT" in upper or "CLOB" in upper
+
+
+def _is_messy_column(db_path: str, table: str, column: str) -> bool:
+    """A column is 'messy' if two or more of its distinct raw values
+    collapse to the same case/whitespace-normalized form."""
+    values = _sample_column_values(db_path, table, column)
+    normalized_groups: dict[str, set[str]] = {}
+    for value in values:
+        if not isinstance(value, str):
+            continue
+        normalized_groups.setdefault(_normalize_text(value), set()).add(value)
+    return any(len(variants) > 1 for variants in normalized_groups.values())
+
+
+def check_messy_categorical_filter(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
+    """Flag exact-match filters on columns that turn out to have
+    inconsistent casing/whitespace in the active dataset, where the
+    comparison isn't normalized on both sides."""
+    tables = _referenced_tables(sql, db_path)
+    if not tables:
+        return None
+
+    columns_by_table = {table: get_table_columns(db_path, table) for table in tables}
+    # column name (lowercased) -> tables that have a text column with that name
+    column_to_tables: dict[str, list[str]] = {}
+    for table, columns in columns_by_table.items():
+        for col_name, col_type, _ in columns:
+            if _is_text_type(col_type):
+                column_to_tables.setdefault(col_name.lower(), []).append(table)
+
+    for match in _EXACT_MATCH_FILTER.finditer(sql):
+        qualifier, column, value = match.groups()
+        candidate_tables = column_to_tables.get(column.lower())
+        if not candidate_tables:
             continue
 
-        value = match.group(1)
-        return (
-            f"This query filters on '{column}' with an exact match "
-            f"({column} = '{value}'), but {column} contains inconsistent "
-            f"casing/formatting on purpose (e.g. 'West', 'west', 'WEST', and "
-            f"'W' all represent the same value - see "
-            f"generate_synthetic_data.py). An exact match like this will "
-            f"silently miss the other variants and undercount. Normalize both "
-            f"sides of the comparison, e.g. LOWER(TRIM({column})) = "
-            f"LOWER('{value}'), or explicitly account for all known variants."
-        )
+        # If the qualifier is itself a real table name (not an alias),
+        # narrow to it; aliases are otherwise left ambiguous and every
+        # candidate table is checked.
+        if qualifier and qualifier.lower() in {t.lower() for t in tables}:
+            candidate_tables = [t for t in candidate_tables if t.lower() == qualifier.lower()] or candidate_tables
+
+        for table in candidate_tables:
+            # Recover the real declared column name (case) for the message.
+            real_column = next(
+                col_name for col_name, col_type, _ in columns_by_table[table] if col_name.lower() == column.lower()
+            )
+            if _is_messy_column(db_path, table, real_column):
+                return (
+                    f"This query filters on '{table}.{real_column}' with an "
+                    f"exact match ({real_column} = '{value}'), but that column "
+                    f"contains inconsistent casing/whitespace in the data "
+                    f"(different raw values that normalize to the same thing, "
+                    f"e.g. 'West'/'west'/'WEST'). An exact match like this will "
+                    f"silently miss the other variants and undercount. "
+                    f"Normalize both sides of the comparison, e.g. "
+                    f"LOWER(TRIM({real_column})) = LOWER('{value}'), or "
+                    f"explicitly account for all known variants."
+                )
 
     return None
