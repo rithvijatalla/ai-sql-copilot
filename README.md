@@ -152,6 +152,16 @@ block anything — the query still runs, but `warning` is populated alongside
 the real result, since a slightly-off row-count is still more useful than no
 answer at all as long as it's flagged.
 
+## Known limitations
+
+This tool focuses on a specific set of failure modes — ambiguous questions and structural data-quality issues that cause an AI-generated SQL query to silently return a misleading answer. It does not attempt to catch every possible data quality issue. Specifically, it does not currently detect:
+
+- **Duplicate rows** — repeated records that would inflate aggregate results (e.g., double-counted orders)
+- **Unit mismatches** — e.g., a column mixing dollars and cents, or metric and imperial units, without a schema-level indicator
+- **Stale or incomplete data** — e.g., a table that stopped being updated, so a question like "revenue this month" silently reflects a partial or outdated load with nothing to indicate data is missing
+
+None of these can be inferred from the schema or a small data sample the way the four existing guardrails are — catching them reliably needs metadata the source system doesn't provide here (row provenance, unit annotations, last-updated timestamps) rather than pattern detection over the query and a data sample.
+
 ## Setup
 
 ```bash
