@@ -40,11 +40,19 @@ def resolve_api_key() -> str | None:
     pipeline/guardrails Streamlit-agnostic - they just read
     ANTHROPIC_API_KEY from the environment as before, via
     anthropic.Anthropic(), so it's injected into os.environ once below.
+
+    Uses load_if_toml_exists() rather than a bare st.secrets.get() /
+    try-except: when no secrets.toml exists, st.secrets internally calls
+    st.error() and renders it on the page as a side effect *before*
+    raising FileNotFoundError, so catching the exception in Python doesn't
+    stop the error banner from having already been queued for render.
+    load_if_toml_exists() is Streamlit's own silent-probe variant, built
+    for exactly this "secrets may not be configured, and that's fine"
+    case.
     """
-    try:
+    if st.secrets.load_if_toml_exists():
         secret_key = st.secrets.get("ANTHROPIC_API_KEY")
-    except FileNotFoundError:
-        # No secrets.toml at all - the normal case for local development.
+    else:
         secret_key = None
     return secret_key or os.environ.get("ANTHROPIC_API_KEY")
 
@@ -132,11 +140,16 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
-.block-container { padding-top: 2rem; padding-bottom: 3rem; max-width: 760px; }
+.block-container { padding-top: 3.5rem; padding-bottom: 3rem; max-width: 760px; }
 
-/* ---- brand header ---- */
+/* ---- brand header ----
+   Extra top margin on top of block-container's own padding: defensive
+   clearance so the accent bar/title/tagline never sit flush against
+   Streamlit's fixed top toolbar (in-app, or any hosting-provided chrome
+   on top of that in a deployed context) - a few extra px of whitespace
+   is cheap, a clipped header is not. */
 .brand { display: flex; align-items: center; gap: 14px; padding-bottom: 1.35rem;
-    margin-bottom: 1.6rem; border-bottom: 1px solid rgba(232,163,61,0.16); }
+    margin-top: 0.5rem; margin-bottom: 1.6rem; border-bottom: 1px solid rgba(232,163,61,0.16); }
 .brand-mark { width: 5px; height: 40px; border-radius: 3px; flex-shrink: 0;
     background: linear-gradient(180deg, #E8A33D, #C97F1E); }
 .brand-title { font-size: 1.55rem; font-weight: 800; letter-spacing: -0.02em;
