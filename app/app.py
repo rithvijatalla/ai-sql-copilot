@@ -30,6 +30,25 @@ from pipeline.data_loader import delete_database, load_uploaded_files
 from pipeline.query_engine import DEFAULT_DB_PATH, ask
 from pipeline.schema_utils import get_schema_description
 
+
+def resolve_api_key() -> str | None:
+    """Resolve the Anthropic API key from either deployment context:
+    st.secrets (Streamlit Cloud) takes priority when available, falling
+    back to os.environ (local development via `source .env`).
+
+    Resolving it here rather than in the pipeline keeps
+    pipeline/guardrails Streamlit-agnostic - they just read
+    ANTHROPIC_API_KEY from the environment as before, via
+    anthropic.Anthropic(), so it's injected into os.environ once below.
+    """
+    try:
+        secret_key = st.secrets.get("ANTHROPIC_API_KEY")
+    except FileNotFoundError:
+        # No secrets.toml at all - the normal case for local development.
+        secret_key = None
+    return secret_key or os.environ.get("ANTHROPIC_API_KEY")
+
+
 EXAMPLE_QUESTIONS = [
     ("Answers cleanly", "What was total revenue in 2024?"),
     ("Triggers check_undefined_metric", "Who are the top customers?"),
@@ -92,6 +111,13 @@ GUARDRAIL_INFO = [
 ]
 
 st.set_page_config(page_title="AI SQL Copilot", page_icon="◆", layout="centered")
+
+# st.secrets access must happen after set_page_config (it must be the first
+# Streamlit command in the script), so the key is resolved and injected
+# into os.environ here rather than at module top.
+_resolved_api_key = resolve_api_key()
+if _resolved_api_key:
+    os.environ["ANTHROPIC_API_KEY"] = _resolved_api_key
 
 # ---------------------------------------------------------------------------
 # Styling
@@ -222,12 +248,14 @@ def render_setup_check(db_path: str) -> bool:
         )
         return False
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not resolve_api_key():
         render_callout(
             "warning",
-            "`ANTHROPIC_API_KEY` isn't set in this environment. Asking a "
-            "question will likely fail until it's configured, e.g.: "
-            "export ANTHROPIC_API_KEY=sk-ant-...",
+            "`ANTHROPIC_API_KEY` isn't configured. Asking a question will "
+            "likely fail until it's set - locally, via a `.env` file "
+            "(`echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env`, then "
+            "`source .env`); on Streamlit Cloud, via the app's "
+            "Settings -> Secrets (`ANTHROPIC_API_KEY = \"sk-ant-...\"`).",
         )
 
     return True

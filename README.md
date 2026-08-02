@@ -170,19 +170,32 @@ pip install anthropic pandas faker pytest streamlit openpyxl
 
 (`openpyxl` is only needed to read uploaded `.xlsx`/`.xls` files.)
 
-Set your Anthropic API key. The pipeline reads it from the environment
-(`anthropic.Anthropic()` looks for `ANTHROPIC_API_KEY`):
+Set your Anthropic API key. The pipeline itself just reads it from the
+environment (`anthropic.Anthropic()` looks for `ANTHROPIC_API_KEY`); the
+Streamlit app (`app/app.py`) resolves it from either of two places
+depending on where it's running, so the same code works locally and on
+Streamlit Cloud without changes:
 
-```bash
-echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env   # gitignored, never committed
-```
+- **Locally**: a gitignored `.env` file.
 
-Then, whenever you run anything that calls the API, source it into your
-shell first:
+  ```bash
+  echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env   # gitignored, never committed
+  ```
 
-```bash
-set -a && source .env && set +a
-```
+  Then, whenever you run anything that calls the API, source it into your
+  shell first:
+
+  ```bash
+  set -a && source .env && set +a
+  ```
+
+- **On Streamlit Cloud**: `st.secrets["ANTHROPIC_API_KEY"]`, set via the
+  app's Settings -> Secrets in the dashboard (or a local
+  `.streamlit/secrets.toml` for testing that config path - also
+  gitignored, never committed).
+
+`app.py` checks `st.secrets` first and falls back to the environment, so a
+`.env`-based local setup keeps working unchanged.
 
 Generate the database (if you haven't already, or want a fresh copy):
 
