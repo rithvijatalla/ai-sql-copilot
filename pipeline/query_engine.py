@@ -54,7 +54,7 @@ Rules:
 
 def generate_sql(question: str, schema_description: str) -> str:
     """Ask Claude to translate a natural language question into a SQL SELECT query."""
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(timeout=90.0)
 
     user_message = (
         f"Schema:\n{schema_description}\n\n"
@@ -148,6 +148,45 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
         if w
     ]
     result["warning"] = "\n\n".join(warnings) if warnings else None
+
+    try:
+        result["result"] = execute_sql_readonly(sql, db_path)
+    except (sqlite3.Error, ValueError) as e:
+        result["error"] = str(e)
+
+    return result
+
+
+def ask_unguarded(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
+    """Same as ask(), but skips all four guardrail checks entirely: question
+    -> generate SQL -> execute -> return, regardless of ambiguity or data
+    quality issues.
+
+    Exists solely so the guarded and unguarded paths can be benchmarked
+    against each other (see tests/run_benchmark.py) - not meant to be used
+    in the app.
+    """
+    result = {
+        "question": question,
+        "sql": None,
+        "result": None,
+        "error": None,
+        "clarification_needed": None,
+        "warning": None,
+    }
+
+    try:
+        schema_description = get_schema_description(db_path)
+    except sqlite3.Error as e:
+        result["error"] = f"Failed to read schema: {e}"
+        return result
+
+    try:
+        sql = generate_sql(question, schema_description)
+        result["sql"] = sql
+    except (anthropic.AnthropicError, TypeError) as e:
+        result["error"] = f"Failed to generate SQL: {e}"
+        return result
 
     try:
         result["result"] = execute_sql_readonly(sql, db_path)

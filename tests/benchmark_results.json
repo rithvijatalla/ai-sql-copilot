@@ -1,0 +1,1924 @@
+[
+  {
+    "num": 1,
+    "category": "clean",
+    "question": "What was total revenue in 2024?",
+    "expected_behavior": "answer",
+    "note": "Clear metric (revenue), clear time bound. Baseline sanity check.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(revenue) FROM orders WHERE order_date BETWEEN '2024-01-01' AND '2024-12-31'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 79344.21
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(revenue) FROM orders WHERE order_date BETWEEN '2024-01-01' AND '2024-12-31'",
+    "unguarded_result_summary": {
+      "scalar": 79344.21
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 2,
+    "category": "clean",
+    "question": "How many customers signed up in 2025?",
+    "expected_behavior": "answer",
+    "note": "Simple filtered count on customers.signup_date.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE strftime('%Y', signup_date) = '2025'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 268
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE strftime('%Y', signup_date) = '2025'",
+    "unguarded_result_summary": {
+      "scalar": 268
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 3,
+    "category": "clean",
+    "question": "What is the average order revenue?",
+    "expected_behavior": "answer",
+    "note": "Single aggregate over orders, no ranking or scope ambiguity.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT AVG(revenue) FROM orders",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 84.11699000000013
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT AVG(revenue) FROM orders",
+    "unguarded_result_summary": {
+      "scalar": 84.11699000000013
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 4,
+    "category": "clean",
+    "question": "How many support tickets are currently open?",
+    "expected_behavior": "answer",
+    "note": "Simple filtered count on support_tickets.status.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'open'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 0
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM support_tickets WHERE status = 'open'",
+    "unguarded_result_summary": {
+      "scalar": 0
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 5,
+    "category": "clean",
+    "question": "What was the total marketing spend in 2024?",
+    "expected_behavior": "answer",
+    "note": "Single-table aggregate on marketing_spend, no orders join involved.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE month LIKE '2024%'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 569062.7600000001
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE month LIKE '2024%'",
+    "unguarded_result_summary": {
+      "scalar": 569062.7600000001
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 6,
+    "category": "clean",
+    "question": "How many orders came through the Email channel?",
+    "expected_behavior": "answer",
+    "note": "Filtered count on orders.channel; channel value is explicit.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM orders WHERE channel = 'Email'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 832
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM orders WHERE channel = 'Email'",
+    "unguarded_result_summary": {
+      "scalar": 832
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 7,
+    "category": "clean",
+    "question": "How many customers are on the Enterprise plan?",
+    "expected_behavior": "answer",
+    "note": "Simple filtered count on customers.plan_tier, unambiguous.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 34
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise'",
+    "unguarded_result_summary": {
+      "scalar": 34
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 8,
+    "category": "undefined_metric",
+    "question": "Who are the top customers?",
+    "expected_behavior": "clarify",
+    "note": "\"Top\" with no metric - by revenue? order count? tickets?",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "What metric would you like to use to rank the top customers? For example, would you like to rank by:\n1. **Total revenue** (sum of `revenue` from the `orders` table),\n2. **Number of orders** (count of `order_id` from the `orders` table), or\n3. **Number of support tickets** (count of `ticket_id` from the `support_tickets` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT customer_id, SUM(revenue) AS total_revenue\nFROM orders\nGROUP BY customer_id\nORDER BY total_revenue DESC\nLIMIT 10",
+    "unguarded_result_summary": {
+      "shape": [
+        10,
+        2
+      ],
+      "columns": [
+        "customer_id",
+        "total_revenue"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 533,
+          "total_revenue": 1408.99
+        },
+        {
+          "customer_id": 178,
+          "total_revenue": 1182.74
+        },
+        {
+          "customer_id": 751,
+          "total_revenue": 1109.8
+        },
+        {
+          "customer_id": 152,
+          "total_revenue": 1067.55
+        },
+        {
+          "customer_id": 171,
+          "total_revenue": 1065.16
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 9,
+    "category": "undefined_metric",
+    "question": "Which region performs best?",
+    "expected_behavior": "clarify",
+    "note": "\"Best\" is undefined - revenue, customer count, retention?",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "What metric should be used to determine which region performs best? For example, would you like to rank regions by:\n1. **Total revenue** (sum of `revenue` from the `orders` table),\n2. **Number of orders** (count of orders from the `orders` table), or\n3. **Number of customers** (count of customers from the `customers` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT region, SUM(revenue) AS total_revenue\nFROM orders\nJOIN customers USING (customer_id)\nGROUP BY region\nORDER BY total_revenue DESC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "region",
+        "total_revenue"
+      ],
+      "sample_rows": [
+        {
+          "region": "South",
+          "total_revenue": 60963.60999999994
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 10,
+    "category": "undefined_metric",
+    "question": "What's the leading marketing channel?",
+    "expected_behavior": "clarify",
+    "note": "\"Leading\" by spend, by orders attributed, by revenue?",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "What metric would you like to use to determine the leading marketing channel? For example, would you like to rank by: 1. **Total amount spent** (from `marketing_spend.amount_spent`), 2. **Total revenue generated** (from `orders.revenue`), or 3. **Number of orders placed** (count of `orders.order_id`)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT channel, SUM(amount_spent) AS total_spent\nFROM marketing_spend\nGROUP BY channel\nORDER BY total_spent DESC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "channel",
+        "total_spent"
+      ],
+      "sample_rows": [
+        {
+          "channel": "Referral",
+          "total_spent": 433598.19000000006
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 11,
+    "category": "undefined_metric",
+    "question": "Show me the worst month.",
+    "expected_behavior": "clarify",
+    "note": "\"Worst\" with no metric and no dimension (revenue? tickets? spend?).",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "Could you clarify what you mean by \"worst month\"? For example, are you looking for the month with the lowest revenue (from the `orders` table), the highest marketing spend (from the `marketing_spend` table), or the most support tickets created (from the `support_tickets` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT strftime('%Y-%m', order_date) AS month, SUM(revenue) AS total_revenue\nFROM orders\nGROUP BY month\nORDER BY total_revenue ASC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "month",
+        "total_revenue"
+      ],
+      "sample_rows": [
+        {
+          "month": "2023-01",
+          "total_revenue": 19.11
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 12,
+    "category": "undefined_metric",
+    "question": "What's the top plan tier?",
+    "expected_behavior": "clarify",
+    "note": "\"Top\" by customer count? by revenue per tier? unspecified.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "What metric would you like to use to determine the \"top\" plan tier? For example, would you like to rank by:\n1. **Total revenue** (sum of `revenue` from the `orders` table),\n2. **Number of customers** (count of `customer_id` from the `customers` table), or\n3. **Number of orders** (count of `order_id` from the `orders` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT plan_tier, COUNT(*) as customer_count\nFROM customers\nGROUP BY plan_tier\nORDER BY customer_count DESC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "plan_tier",
+        "customer_count"
+      ],
+      "sample_rows": [
+        {
+          "plan_tier": "Free",
+          "customer_count": 441
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 13,
+    "category": "undefined_metric",
+    "question": "Which support ticket status is highest?",
+    "expected_behavior": "clarify",
+    "note": "\"Highest\" implies count, but that's assumed, not stated.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "What metric would you like to use to determine which support ticket status is \"highest\"? For example, would you like to rank by:\n1. **Number of tickets** (count of ticket_id per status),\n2. **Number of distinct customers** (count of unique customer_id per status), or\n3. **Most recent activity** (latest created_at date per status)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT status, COUNT(*) as count FROM support_tickets GROUP BY status ORDER BY count DESC LIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "status",
+        "count"
+      ],
+      "sample_rows": [
+        {
+          "status": "Closed",
+          "count": 215
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 14,
+    "category": "undefined_metric",
+    "question": "What's the best-performing channel this year?",
+    "expected_behavior": "clarify",
+    "note": "\"Best-performing\" by revenue, order count, or ROI is all plausible and unstated.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "When you say \"best-performing channel,\" which metric would you like to rank by? For example, are you interested in: 1) **Total revenue** (sum of `revenue` from the `orders` table), 2) **Number of orders** (count of `order_id` from the `orders` table), or 3) **Marketing spend** (sum of `amount_spent` from the `marketing_spend` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT channel, SUM(revenue) AS total_revenue\nFROM orders\nWHERE strftime('%Y', order_date) = strftime('%Y', 'now')\nGROUP BY channel\nORDER BY total_revenue DESC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        0,
+        2
+      ],
+      "columns": [
+        "channel",
+        "total_revenue"
+      ],
+      "sample_rows": []
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": true
+  },
+  {
+    "num": 15,
+    "category": "out_of_scope",
+    "question": "Show me everything in the database.",
+    "expected_behavior": "clarify",
+    "note": "Textbook unbounded dump across all four tables.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request is too broad to answer effectively \u2014 dumping the entire database would return all rows from all tables (customers, marketing_spend, orders, and support_tickets) with no filtering, aggregation, or focus.\n\nTo make this actionable, could you narrow it down? Here are a few concrete suggestions:\n\n- **Specific table + filter**: e.g., \"Show me all orders from December 2024\" or \"List customers in the West region.\"\n- **Aggregation**: e.g., \"Give me total revenue by channel\" or \"How many support tickets were created each month?\"\n- **A limited preview**: e.g., \"Show me the first 10 rows of the orders table.\"\n\nWhat are you most interested in exploring?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT * FROM customers",
+    "unguarded_result_summary": {
+      "shape": [
+        800,
+        4
+      ],
+      "columns": [
+        "customer_id",
+        "signup_date",
+        "region",
+        "plan_tier"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 1,
+          "signup_date": "2023-08-17",
+          "region": "West",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 2,
+          "signup_date": "2024-05-16",
+          "region": "east",
+          "plan_tier": "Pro"
+        },
+        {
+          "customer_id": 3,
+          "signup_date": "2023-06-28",
+          "region": "south",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 4,
+          "signup_date": "2024-03-23",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 5,
+          "signup_date": "2023-02-24",
+          "region": "East",
+          "plan_tier": "Free"
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 16,
+    "category": "out_of_scope",
+    "question": "List all customers with full details.",
+    "expected_behavior": "clarify",
+    "note": "Every row, every column, no filter or aggregation.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request asks for every row and all columns from the `customers` table with no filters, aggregations, or limits applied. This could return a very large, unmanageable result set.\n\nTo make this more useful, could you scope it down? For example:\n- **Filter by region**: \"List all customers in the West region\"\n- **Filter by plan tier**: \"Show all customers on the Pro plan tier\"\n- **Filter by signup date**: \"List customers who signed up in 2024\"\n- **Limit results**: \"Show the first 100 customers by signup date\"\n- **Summarize**: \"Count customers by region and plan tier\"\n\nPlease add a filter, time range, limit, or aggregation and I'll get that query running for you!",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT * FROM customers",
+    "unguarded_result_summary": {
+      "shape": [
+        800,
+        4
+      ],
+      "columns": [
+        "customer_id",
+        "signup_date",
+        "region",
+        "plan_tier"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 1,
+          "signup_date": "2023-08-17",
+          "region": "West",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 2,
+          "signup_date": "2024-05-16",
+          "region": "east",
+          "plan_tier": "Pro"
+        },
+        {
+          "customer_id": 3,
+          "signup_date": "2023-06-28",
+          "region": "south",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 4,
+          "signup_date": "2024-03-23",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 5,
+          "signup_date": "2023-02-24",
+          "region": "East",
+          "plan_tier": "Free"
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": true,
+    "date_clock_bug": false
+  },
+  {
+    "num": 17,
+    "category": "out_of_scope",
+    "question": "Give me every order for every customer, with all their support tickets.",
+    "expected_behavior": "clarify",
+    "note": "Unbounded multi-table row-level dump, no scoping.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request asks for all orders joined with all support tickets across every customer, with no filters, time range, or aggregation applied. That could return an extremely large, unwieldy result set.\n\nTo make this more manageable, could you scope it down a bit? Here are some concrete suggestions based on your schema:\n\n- **Filter by time range**: e.g., \"Give me all orders and support tickets from Q4 2024\" (using `order_date` or `created_at`)\n- **Filter by customer**: e.g., \"Show orders and support tickets for customer ID 1042\"\n- **Filter by region or plan tier**: e.g., \"Show orders and support tickets for customers in the West region\"\n- **Filter by ticket status**: e.g., \"Show orders alongside open support tickets\"\n- **Aggregate instead**: e.g., \"Show total revenue and ticket count per customer\"\n\nWhich of these directions works for you, or do you have a different filter in mind?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT o.order_id, o.order_date, o.revenue, o.channel, c.customer_id, c.region, c.plan_tier, c.signup_date, st.ticket_id, st.created_at, st.status\nFROM customers c\nLEFT JOIN orders o ON c.customer_id = o.customer_id\nLEFT JOIN support_tickets st ON c.customer_id = st.customer_id",
+    "unguarded_result_summary": {
+      "shape": [
+        4872,
+        11
+      ],
+      "columns": [
+        "order_id",
+        "order_date",
+        "revenue",
+        "channel",
+        "customer_id",
+        "region",
+        "plan_tier",
+        "signup_date",
+        "ticket_id",
+        "created_at",
+        "status"
+      ],
+      "sample_rows": [
+        {
+          "order_id": 1978.0,
+          "order_date": "2023-10-17",
+          "revenue": 92.68,
+          "channel": "Email",
+          "customer_id": 1,
+          "region": "West",
+          "plan_tier": "Free",
+          "signup_date": "2023-08-17",
+          "ticket_id": 576.0,
+          "created_at": "2025-11-06",
+          "status": "Pending"
+        },
+        {
+          "order_id": 3806.0,
+          "order_date": "2024-04-30",
+          "revenue": 12.03,
+          "channel": "Email",
+          "customer_id": 1,
+          "region": "West",
+          "plan_tier": "Free",
+          "signup_date": "2023-08-17",
+          "ticket_id": 576.0,
+          "created_at": "2025-11-06",
+          "status": "Pending"
+        },
+        {
+          "order_id": 166.0,
+          "order_date": "2024-07-21",
+          "revenue": 144.85,
+          "channel": "Organic",
+          "customer_id": 1,
+          "region": "West",
+          "plan_tier": "Free",
+          "signup_date": "2023-08-17",
+          "ticket_id": 576.0,
+          "created_at": "2025-11-06",
+          "status": "Pending"
+        },
+        {
+          "order_id": 771.0,
+          "order_date": "2025-02-02",
+          "revenue": 107.6,
+          "channel": "Organic",
+          "customer_id": 1,
+          "region": "West",
+          "plan_tier": "Free",
+          "signup_date": "2023-08-17",
+          "ticket_id": 576.0,
+          "created_at": "2025-11-06",
+          "status": "Pending"
+        },
+        {
+          "order_id": 1159.0,
+          "order_date": "2025-08-06",
+          "revenue": 54.24,
+          "channel": "Referral",
+          "customer_id": 1,
+          "region": "West",
+          "plan_tier": "Free",
+          "signup_date": "2023-08-17",
+          "ticket_id": 576.0,
+          "created_at": "2025-11-06",
+          "status": "Pending"
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 18,
+    "category": "out_of_scope",
+    "question": "Dump the entire orders table.",
+    "expected_behavior": "clarify",
+    "note": "Explicit unbounded single-table dump, no filter or aggregation.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request asks for a full, unfiltered dump of the entire `orders` table, which could return a very large number of rows with no summarization or filtering. To keep the query manageable and meaningful, could you narrow it down? Here are a few suggestions:\n\n- **Filter by date range**: \"Show all orders from the last 3 months\" (filtering on `order_date`)\n- **Filter by channel**: \"Show all orders from the 'web' channel\"\n- **Aggregate**: \"Show total revenue by channel\" or \"Show monthly order counts\"\n- **Limit rows**: \"Show the 100 most recent orders\"\n\nPlease add a filter, time range, limit, or aggregation and I'll get that query built for you!",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT * FROM orders",
+    "unguarded_result_summary": {
+      "shape": [
+        4000,
+        5
+      ],
+      "columns": [
+        "order_id",
+        "customer_id",
+        "order_date",
+        "revenue",
+        "channel"
+      ],
+      "sample_rows": [
+        {
+          "order_id": 1,
+          "customer_id": 781,
+          "order_date": "2025-01-12",
+          "revenue": 32.57,
+          "channel": "Paid Search"
+        },
+        {
+          "order_id": 2,
+          "customer_id": 102,
+          "order_date": "2025-09-05",
+          "revenue": 108.29,
+          "channel": null
+        },
+        {
+          "order_id": 3,
+          "customer_id": 128,
+          "order_date": "2024-04-07",
+          "revenue": 192.92,
+          "channel": "Email"
+        },
+        {
+          "order_id": 4,
+          "customer_id": 468,
+          "order_date": "2025-05-22",
+          "revenue": 160.73,
+          "channel": "Email"
+        },
+        {
+          "order_id": 5,
+          "customer_id": 208,
+          "order_date": "2025-08-05",
+          "revenue": 175.59,
+          "channel": null
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": true,
+    "date_clock_bug": false
+  },
+  {
+    "num": 19,
+    "category": "out_of_scope",
+    "question": "Show me every support ticket in full detail.",
+    "expected_behavior": "clarify",
+    "note": "Every row, every column, no filter or aggregation - same pattern, different table.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request asks for every row in the `support_tickets` table with no filters, time range, or aggregation, which would be an unbounded data dump. Could you narrow it down a bit? Here are some suggestions:\n\n- **Filter by status**: e.g., \"Show me all open support tickets\" (`WHERE status = 'open'`)\n- **Filter by date range**: e.g., \"Show me support tickets created in the last 30 days\" (`WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`)\n- **Filter by customer**: e.g., \"Show me all support tickets for customer ID 123\"\n- **Summarize**: e.g., \"How many support tickets are there by status?\" or \"Show me the number of tickets created per month\"\n\nPlease add a filter, time range, or aggregation and I'll be happy to help!",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT * FROM support_tickets",
+    "unguarded_result_summary": {
+      "shape": [
+        600,
+        4
+      ],
+      "columns": [
+        "ticket_id",
+        "customer_id",
+        "created_at",
+        "status"
+      ],
+      "sample_rows": [
+        {
+          "ticket_id": 1,
+          "customer_id": 357,
+          "created_at": "2025-06-27",
+          "status": "Closed"
+        },
+        {
+          "ticket_id": 2,
+          "customer_id": 92,
+          "created_at": "2024-08-31",
+          "status": "Closed"
+        },
+        {
+          "ticket_id": 3,
+          "customer_id": 632,
+          "created_at": "2025-07-17",
+          "status": "Pending"
+        },
+        {
+          "ticket_id": 4,
+          "customer_id": 234,
+          "created_at": "2024-02-04",
+          "status": "Closed"
+        },
+        {
+          "ticket_id": 5,
+          "customer_id": 104,
+          "created_at": "2025-09-13",
+          "status": "Pending"
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": true,
+    "date_clock_bug": false
+  },
+  {
+    "num": 20,
+    "category": "out_of_scope",
+    "question": "Give me a complete export of all marketing spend records.",
+    "expected_behavior": "clarify",
+    "note": "\"Complete export\" is an unbounded dump phrased as a business ask.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "This request asks for a full, unfiltered export of all records in the `marketing_spend` table, which is too broad for the analytics copilot to handle without some scoping. To keep results meaningful and manageable, could you narrow it down? For example:\n\n- **Filter by channel**: \"Show all marketing spend for the 'paid_search' channel\"\n- **Filter by time range**: \"Show marketing spend for Q1 2024\"\n- **Aggregate**: \"Show total amount spent by channel\" or \"Show monthly marketing spend totals\"\n- **Limit**: \"Show the top 10 largest marketing spend records\"\n\nPlease add a filter, time range, aggregation, or limit and I'll get that query built for you!",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT * FROM marketing_spend",
+    "unguarded_result_summary": {
+      "shape": [
+        144,
+        4
+      ],
+      "columns": [
+        "spend_id",
+        "month",
+        "channel",
+        "amount_spent"
+      ],
+      "sample_rows": [
+        {
+          "spend_id": 1,
+          "month": "2023-01",
+          "channel": "Paid Search",
+          "amount_spent": 3586.28
+        },
+        {
+          "spend_id": 2,
+          "month": "2023-01",
+          "channel": "Organic",
+          "amount_spent": 18824.72
+        },
+        {
+          "spend_id": 3,
+          "month": "2023-01",
+          "channel": "Referral",
+          "amount_spent": 1006.72
+        },
+        {
+          "spend_id": 4,
+          "month": "2023-01",
+          "channel": "Email",
+          "amount_spent": 5775.26
+        },
+        {
+          "spend_id": 5,
+          "month": "2023-02",
+          "channel": "Paid Search",
+          "amount_spent": 11559.39
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": true,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": true,
+    "date_clock_bug": false
+  },
+  {
+    "num": 21,
+    "category": "granularity_mismatch",
+    "question": "What is the total marketing spend associated with Email channel orders in 2024?",
+    "expected_behavior": "warn",
+    "note": "Naive join fans the monthly Email spend out across every 2024 Email order and overcounts.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(ms.amount_spent)\nFROM marketing_spend ms\nWHERE ms.channel = 'Email'\n  AND ms.month LIKE '2024%'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 146793.25999999998
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(ms.amount_spent)\nFROM marketing_spend ms\nWHERE ms.channel = 'Email'\nAND ms.month LIKE '2024%'",
+    "unguarded_result_summary": {
+      "scalar": 146793.25999999998
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Email' AND month LIKE '2024-%'",
+    "ground_truth_value": 146793.25999999998,
+    "unguarded_actual_value": 146793.25999999998,
+    "unguarded_correct": true,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 22,
+    "category": "granularity_mismatch",
+    "question": "What is the total marketing spend behind Paid Search channel orders in 2025?",
+    "expected_behavior": "warn",
+    "note": "Same trap, different channel/year.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(ms.amount_spent) AS total_marketing_spend\nFROM marketing_spend ms\nWHERE ms.channel = 'Paid Search'\n  AND ms.month LIKE '2025%'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 155398.12
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(ms.amount_spent)\nFROM marketing_spend ms\nWHERE ms.channel = 'Paid Search'\n  AND ms.month LIKE '2025%'",
+    "unguarded_result_summary": {
+      "scalar": 155398.12
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Paid Search' AND month LIKE '2025-%'",
+    "ground_truth_value": 155398.12,
+    "unguarded_actual_value": 155398.12,
+    "unguarded_correct": true,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 23,
+    "category": "granularity_mismatch",
+    "question": "What is the total marketing spend tied to Organic channel orders overall?",
+    "expected_behavior": "warn",
+    "note": "No year filter - all-time version of the same trap.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(ms.amount_spent) AS total_organic_spend\nFROM marketing_spend ms\nWHERE ms.channel = 'Organic'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 420617.47
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(ms.amount_spent) AS total_spend\nFROM marketing_spend ms\nWHERE ms.channel = 'Organic'",
+    "unguarded_result_summary": {
+      "scalar": 420617.47
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Organic'",
+    "ground_truth_value": 420617.47,
+    "unguarded_actual_value": 420617.47,
+    "unguarded_correct": true,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 24,
+    "category": "granularity_mismatch",
+    "question": "What is the total marketing spend that funded Referral channel orders in 2023?",
+    "expected_behavior": "warn",
+    "note": "Same trap, Referral channel, first year of data.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(ms.amount_spent) AS total_marketing_spend\nFROM marketing_spend ms\nWHERE ms.channel = 'Referral'\n  AND ms.month LIKE '2023%'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 119655.12
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(ms.amount_spent) AS total_marketing_spend\nFROM marketing_spend ms\nWHERE ms.channel = 'Referral'\n  AND ms.month LIKE '2023%'",
+    "unguarded_result_summary": {
+      "scalar": 119655.12
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Referral' AND month LIKE '2023-%'",
+    "ground_truth_value": 119655.12,
+    "unguarded_actual_value": 119655.12,
+    "unguarded_correct": true,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 25,
+    "category": "granularity_mismatch",
+    "question": "Show each order alongside the marketing spend for its channel, and report the total spend involved.",
+    "expected_behavior": "warn",
+    "note": "Original per-order framing (invites a join) plus an explicit request for a total, so the answer is a single comparable number.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT o.order_id, o.customer_id, o.order_date, o.revenue, o.channel, SUM(ms.amount_spent) AS total_marketing_spend\nFROM orders o\nLEFT JOIN marketing_spend ms ON o.channel = ms.channel\nGROUP BY o.order_id, o.customer_id, o.order_date, o.revenue, o.channel",
+    "guarded_clarification": null,
+    "guarded_warning": "This query joins 'marketing_spend' (monthly grain, via marketing_spend.month) with 'orders' (daily grain, via orders.order_date) without an aggregation that reconciles the two - e.g. grouping the finer-grained side by a truncated date (strftime/substr) before comparing. Results may double-count or misalign values across the mismatched grains.",
+    "guarded_result_summary": {
+      "shape": [
+        4000,
+        6
+      ],
+      "columns": [
+        "order_id",
+        "customer_id",
+        "order_date",
+        "revenue",
+        "channel",
+        "total_marketing_spend"
+      ],
+      "sample_rows": [
+        {
+          "order_id": 1,
+          "customer_id": 781,
+          "order_date": "2025-01-12",
+          "revenue": 32.57,
+          "channel": "Paid Search",
+          "total_marketing_spend": 376817.0599999999
+        },
+        {
+          "order_id": 2,
+          "customer_id": 102,
+          "order_date": "2025-09-05",
+          "revenue": 108.29,
+          "channel": null,
+          "total_marketing_spend": null
+        },
+        {
+          "order_id": 3,
+          "customer_id": 128,
+          "order_date": "2024-04-07",
+          "revenue": 192.92,
+          "channel": "Email",
+          "total_marketing_spend": 415570.22
+        },
+        {
+          "order_id": 4,
+          "customer_id": 468,
+          "order_date": "2025-05-22",
+          "revenue": 160.73,
+          "channel": "Email",
+          "total_marketing_spend": 415570.22
+        },
+        {
+          "order_id": 5,
+          "customer_id": 208,
+          "order_date": "2025-08-05",
+          "revenue": 175.59,
+          "channel": null,
+          "total_marketing_spend": null
+        }
+      ]
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT o.order_id, o.customer_id, o.order_date, o.revenue, o.channel, SUM(ms.amount_spent) AS total_marketing_spend\nFROM orders o\nLEFT JOIN marketing_spend ms ON o.channel = ms.channel\nGROUP BY o.order_id, o.customer_id, o.order_date, o.revenue, o.channel",
+    "unguarded_result_summary": {
+      "shape": [
+        4000,
+        6
+      ],
+      "columns": [
+        "order_id",
+        "customer_id",
+        "order_date",
+        "revenue",
+        "channel",
+        "total_marketing_spend"
+      ],
+      "sample_rows": [
+        {
+          "order_id": 1,
+          "customer_id": 781,
+          "order_date": "2025-01-12",
+          "revenue": 32.57,
+          "channel": "Paid Search",
+          "total_marketing_spend": 376817.0599999999
+        },
+        {
+          "order_id": 2,
+          "customer_id": 102,
+          "order_date": "2025-09-05",
+          "revenue": 108.29,
+          "channel": null,
+          "total_marketing_spend": null
+        },
+        {
+          "order_id": 3,
+          "customer_id": 128,
+          "order_date": "2024-04-07",
+          "revenue": 192.92,
+          "channel": "Email",
+          "total_marketing_spend": 415570.22
+        },
+        {
+          "order_id": 4,
+          "customer_id": 468,
+          "order_date": "2025-05-22",
+          "revenue": 160.73,
+          "channel": "Email",
+          "total_marketing_spend": 415570.22
+        },
+        {
+          "order_id": 5,
+          "customer_id": 208,
+          "order_date": "2025-08-05",
+          "revenue": 175.59,
+          "channel": null,
+          "total_marketing_spend": null
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend",
+    "ground_truth_value": 1646602.9400000002,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "silently wrong",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 26,
+    "category": "granularity_mismatch",
+    "question": "Compare daily order revenue to marketing spend by channel, then report the total marketing spend for the Email channel in 2025.",
+    "expected_behavior": "warn",
+    "note": "Keeps the original daily-comparison framing that reliably invited a join in testing, narrowed to a scalar answer.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT SUM(amount_spent) AS total_email_spend\nFROM marketing_spend\nWHERE channel = 'Email'\n  AND month LIKE '2025%'",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 133415.18
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT SUM(amount_spent) AS total_email_spend_2025\nFROM marketing_spend\nWHERE channel = 'Email'\n  AND month LIKE '2025%'",
+    "unguarded_result_summary": {
+      "scalar": 133415.18
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Email' AND month LIKE '2025-%'",
+    "ground_truth_value": 133415.18,
+    "unguarded_actual_value": 133415.18,
+    "unguarded_correct": true,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 27,
+    "category": "granularity_mismatch",
+    "question": "List every order next to that month's marketing spend for its channel, then report the total spend shown for the Paid Search channel in 2024.",
+    "expected_behavior": "warn",
+    "note": "Same per-order listing framing as the original eval question, narrowed to a scalar answer.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "Part of your request \u2014 \"list every order next to that month's marketing spend for its channel\" \u2014 asks for a full, unfiltered row-by-row dump of the orders table joined to marketing_spend, with no filters, aggregation, or limit applied. This could return an extremely large result set and is outside what the analytics copilot is designed to handle.\n\n**Suggestion:** Could you scope that first part down? For example:\n- **Filter by time range:** \"List orders from Q1 2024 next to that month's marketing spend for its channel.\"\n- **Filter by channel:** \"List orders for the Paid Search channel next to that month's marketing spend.\"\n- **Aggregate instead:** \"Show total revenue and total marketing spend by channel and month.\"\n\nThe second part of your request \u2014 total marketing spend for Paid Search in 2024 \u2014 is a well-scoped aggregation and is perfectly fine on its own. Feel free to add a scope to the first part and I'll run both together!",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "WITH order_spend AS (\n    SELECT\n        o.order_id,\n        o.customer_id,\n        o.order_date,\n        o.revenue,\n        o.channel,\n        ms.month,\n        ms.amount_spent AS monthly_channel_spend\n    FROM orders o\n    LEFT JOIN marketing_spend ms\n        ON o.channel = ms.channel\n        AND strftime('%Y-%m', o.order_date) = substr(ms.month, 1, 7)\n),\npaid_search_2024 AS (\n    SELECT SUM(amount_spent) AS total_paid_search_2024\n    FROM marketing_spend\n    WHERE channel = 'Paid Search'\n      AND substr(month, 1, 4) = '2024'\n)\nSELECT\n    os.*,\n    ps.total_paid_search_2024\nFROM order_spend os\nCROSS JOIN paid_search_2024 ps",
+    "unguarded_result_summary": {
+      "shape": [
+        4000,
+        8
+      ],
+      "columns": [
+        "order_id",
+        "customer_id",
+        "order_date",
+        "revenue",
+        "channel",
+        "month",
+        "monthly_channel_spend",
+        "total_paid_search_2024"
+      ],
+      "sample_rows": [
+        {
+          "order_id": 1,
+          "customer_id": 781,
+          "order_date": "2025-01-12",
+          "revenue": 32.57,
+          "channel": "Paid Search",
+          "month": "2025-01",
+          "monthly_channel_spend": 12431.58,
+          "total_paid_search_2024": 107533.17000000001
+        },
+        {
+          "order_id": 2,
+          "customer_id": 102,
+          "order_date": "2025-09-05",
+          "revenue": 108.29,
+          "channel": null,
+          "month": null,
+          "monthly_channel_spend": null,
+          "total_paid_search_2024": 107533.17000000001
+        },
+        {
+          "order_id": 3,
+          "customer_id": 128,
+          "order_date": "2024-04-07",
+          "revenue": 192.92,
+          "channel": "Email",
+          "month": "2024-04",
+          "monthly_channel_spend": 12381.89,
+          "total_paid_search_2024": 107533.17000000001
+        },
+        {
+          "order_id": 4,
+          "customer_id": 468,
+          "order_date": "2025-05-22",
+          "revenue": 160.73,
+          "channel": "Email",
+          "month": "2025-05",
+          "monthly_channel_spend": 16450.05,
+          "total_paid_search_2024": 107533.17000000001
+        },
+        {
+          "order_id": 5,
+          "customer_id": 208,
+          "order_date": "2025-08-05",
+          "revenue": 175.59,
+          "channel": null,
+          "month": null,
+          "monthly_channel_spend": null,
+          "total_paid_search_2024": 107533.17000000001
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Paid Search' AND month LIKE '2024-%'",
+    "ground_truth_value": 107533.17000000001,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": false,
+    "needs_manual_grading": false,
+    "manual_grade": "acceptable",
+    "final_verdict": "correct",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 28,
+    "category": "messy_categorical_filter",
+    "question": "How many customers are in the West region?",
+    "expected_behavior": "warn",
+    "note": "The motivating bug for check_messy_categorical_filter: generated `WHERE region = 'West'` and returned 134, silently missing 'west'/'WEST'/'W' rows (184 is correct).",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'West'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'West'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('West'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 134
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'West'",
+    "unguarded_result_summary": {
+      "scalar": 134
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('WEST', 'W')",
+    "ground_truth_value": 184,
+    "unguarded_actual_value": 134,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 29,
+    "category": "messy_categorical_filter",
+    "question": "List customers in the East region.",
+    "expected_behavior": "warn",
+    "note": "Same undernormalized-filter risk as the West-region question, different region and phrasing (list vs. count).",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT customer_id, signup_date, region, plan_tier FROM customers WHERE region = 'East'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'East'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('East'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "shape": [
+        139,
+        4
+      ],
+      "columns": [
+        "customer_id",
+        "signup_date",
+        "region",
+        "plan_tier"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 4,
+          "signup_date": "2024-03-23",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 5,
+          "signup_date": "2023-02-24",
+          "region": "East",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 6,
+          "signup_date": "2025-05-09",
+          "region": "East",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 9,
+          "signup_date": "2023-11-15",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 14,
+          "signup_date": "2025-01-10",
+          "region": "East",
+          "plan_tier": "Free"
+        }
+      ]
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT customer_id, signup_date, region, plan_tier FROM customers WHERE region = 'East'",
+    "unguarded_result_summary": {
+      "shape": [
+        139,
+        4
+      ],
+      "columns": [
+        "customer_id",
+        "signup_date",
+        "region",
+        "plan_tier"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 4,
+          "signup_date": "2024-03-23",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 5,
+          "signup_date": "2023-02-24",
+          "region": "East",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 6,
+          "signup_date": "2025-05-09",
+          "region": "East",
+          "plan_tier": "Free"
+        },
+        {
+          "customer_id": 9,
+          "signup_date": "2023-11-15",
+          "region": "East",
+          "plan_tier": "Basic"
+        },
+        {
+          "customer_id": 14,
+          "signup_date": "2025-01-10",
+          "region": "East",
+          "plan_tier": "Free"
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('EAST', 'E')",
+    "ground_truth_value": 186,
+    "unguarded_actual_value": 139,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 30,
+    "category": "messy_categorical_filter",
+    "question": "How many customers signed up in the South region last year?",
+    "expected_behavior": "warn",
+    "note": "Combines a region filter with a date filter - checks the guardrail still fires when region isn't the only WHERE clause.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'South' AND strftime('%Y', signup_date) = strftime('%Y', 'now', '-1 year')",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'South'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('South'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 44
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'South' AND strftime('%Y', signup_date) = strftime('%Y', 'now', '-1 year')",
+    "unguarded_result_summary": {
+      "scalar": 44
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('SOUTH', 'S') AND signup_date BETWEEN '2025-01-01' AND '2025-12-31'",
+    "ground_truth_value": 66,
+    "unguarded_actual_value": 44,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 31,
+    "category": "messy_categorical_filter",
+    "question": "How many customers are in the North region?",
+    "expected_behavior": "warn",
+    "note": "Same bug, North region.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'North'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'North'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('North'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 138
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'North'",
+    "unguarded_result_summary": {
+      "scalar": 138
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('NORTH', 'N')",
+    "ground_truth_value": 205,
+    "unguarded_actual_value": 138,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 32,
+    "category": "messy_categorical_filter",
+    "question": "How many Pro-plan customers are in the West region?",
+    "expected_behavior": "warn",
+    "note": "Region filter combined with a second, unrelated (clean) filter on plan_tier.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Pro' AND region = 'West'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'West'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('West'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 13
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Pro' AND region = 'West'",
+    "unguarded_result_summary": {
+      "scalar": 13
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('WEST', 'W') AND plan_tier = 'Pro'",
+    "ground_truth_value": 23,
+    "unguarded_actual_value": 13,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 33,
+    "category": "messy_categorical_filter",
+    "question": "How many customers signed up in the North region in 2024?",
+    "expected_behavior": "warn",
+    "note": "Region filter combined with an explicit (not relative) year filter.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'North' AND signup_date LIKE '2024%'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'North'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('North'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 47
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE region = 'North' AND strftime('%Y', signup_date) = '2024'",
+    "unguarded_result_summary": {
+      "scalar": 47
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('NORTH', 'N') AND signup_date BETWEEN '2024-01-01' AND '2024-12-31'",
+    "ground_truth_value": 69,
+    "unguarded_actual_value": 47,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 34,
+    "category": "messy_categorical_filter",
+    "question": "How many Enterprise-plan customers are in the South region?",
+    "expected_behavior": "warn",
+    "note": "Same pattern as the West/Pro question, South region and a different plan tier.",
+    "guarded_outcome": "WARNED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise' AND region = 'South'",
+    "guarded_clarification": null,
+    "guarded_warning": "This query filters on 'customers.region' with an exact match (region = 'South'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('South'), or explicitly account for all known variants.",
+    "guarded_result_summary": {
+      "scalar": 5
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise' AND region = 'South'",
+    "unguarded_result_summary": {
+      "scalar": 5
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": "SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('SOUTH', 'S') AND plan_tier = 'Enterprise'",
+    "ground_truth_value": 12,
+    "unguarded_actual_value": 5,
+    "unguarded_correct": false,
+    "guarded_flagged": true,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": "wrong",
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 35,
+    "category": "edge_case",
+    "question": "How many orders don't have a channel recorded?",
+    "expected_behavior": "answer",
+    "note": "Tests whether the generated SQL correctly uses 'channel IS NULL' rather than a broken equality check.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM orders WHERE channel IS NULL OR channel = ''",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 600
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM orders WHERE channel IS NULL OR channel = ''",
+    "unguarded_result_summary": {
+      "scalar": 600
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 36,
+    "category": "edge_case",
+    "question": "What was the top month for revenue?",
+    "expected_behavior": "answer",
+    "note": "Borderline for check_undefined_metric: uses \"top\" but the metric (revenue) IS specified, so this should NOT be flagged for clarification. Included to check for over-triggering.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT strftime('%Y-%m', order_date) AS month, SUM(revenue) AS total_revenue FROM orders GROUP BY month ORDER BY total_revenue DESC LIMIT 1",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "month",
+        "total_revenue"
+      ],
+      "sample_rows": [
+        {
+          "month": "2025-12",
+          "total_revenue": 38225.41000000005
+        }
+      ]
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT strftime('%Y-%m', order_date) AS month, SUM(revenue) AS total_revenue\nFROM orders\nGROUP BY month\nORDER BY total_revenue DESC\nLIMIT 1",
+    "unguarded_result_summary": {
+      "shape": [
+        1,
+        2
+      ],
+      "columns": [
+        "month",
+        "total_revenue"
+      ],
+      "sample_rows": [
+        {
+          "month": "2025-12",
+          "total_revenue": 38225.41000000005
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 37,
+    "category": "edge_case",
+    "question": "Which customers are most valuable?",
+    "expected_behavior": "clarify",
+    "note": "Genuinely borderline: \"most valuable\" strongly implies revenue but never says so. Could reasonably go either way - judge this one yourself rather than trusting the guessed expected_behavior.",
+    "guarded_outcome": "CLARIFIED",
+    "guarded_sql": null,
+    "guarded_clarification": "When you say \"most valuable,\" which metric should be used to rank customers? For example, would you like to rank by: 1) **Total revenue** (sum of `revenue` from the `orders` table), 2) **Number of orders placed** (count of `order_id` from the `orders` table), or 3) **Number of support tickets submitted** (count of `ticket_id` from the `support_tickets` table)?",
+    "guarded_warning": null,
+    "guarded_result_summary": null,
+    "guarded_error": null,
+    "unguarded_sql": "SELECT customer_id, SUM(revenue) AS total_revenue, COUNT(order_id) AS order_count\nFROM orders\nGROUP BY customer_id\nORDER BY total_revenue DESC\nLIMIT 20",
+    "unguarded_result_summary": {
+      "shape": [
+        20,
+        3
+      ],
+      "columns": [
+        "customer_id",
+        "total_revenue",
+        "order_count"
+      ],
+      "sample_rows": [
+        {
+          "customer_id": 533,
+          "total_revenue": 1408.99,
+          "order_count": 12
+        },
+        {
+          "customer_id": 178,
+          "total_revenue": 1182.74,
+          "order_count": 11
+        },
+        {
+          "customer_id": 751,
+          "total_revenue": 1109.8,
+          "order_count": 12
+        },
+        {
+          "customer_id": 152,
+          "total_revenue": 1067.55,
+          "order_count": 13
+        },
+        {
+          "customer_id": 171,
+          "total_revenue": 1065.16,
+          "order_count": 10
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 38,
+    "category": "edge_case",
+    "question": "How many customers have never placed an order?",
+    "expected_behavior": "answer",
+    "note": "Clear question, but tests whether the generated SQL correctly handles the NOT IN / LEFT JOIN NULL pattern.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT COUNT(*) FROM customers WHERE customer_id NOT IN (SELECT DISTINCT customer_id FROM orders)",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 7
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT COUNT(*) FROM customers WHERE customer_id NOT IN (SELECT DISTINCT customer_id FROM orders)",
+    "unguarded_result_summary": {
+      "scalar": 7
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 39,
+    "category": "edge_case",
+    "question": "What's the average number of orders per customer?",
+    "expected_behavior": "answer",
+    "note": "Clear metric, but tests whether customers with zero orders are handled correctly in the denominator.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT CAST(COUNT(order_id) AS REAL) / COUNT(DISTINCT customer_id) AS avg_orders_per_customer FROM orders",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "scalar": 5.044136191677175
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT CAST(COUNT(order_id) AS REAL) / COUNT(DISTINCT customer_id) AS avg_orders_per_customer FROM orders",
+    "unguarded_result_summary": {
+      "scalar": 5.044136191677175
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  },
+  {
+    "num": 40,
+    "category": "edge_case",
+    "question": "Show me the top 3 support ticket statuses by count.",
+    "expected_behavior": "answer",
+    "note": "Uses \"top\" but explicitly names the metric (\"by count\") - should NOT trigger check_undefined_metric.",
+    "guarded_outcome": "ANSWERED",
+    "guarded_sql": "SELECT status, COUNT(*) as ticket_count\nFROM support_tickets\nGROUP BY status\nORDER BY ticket_count DESC\nLIMIT 3",
+    "guarded_clarification": null,
+    "guarded_warning": null,
+    "guarded_result_summary": {
+      "shape": [
+        3,
+        2
+      ],
+      "columns": [
+        "status",
+        "ticket_count"
+      ],
+      "sample_rows": [
+        {
+          "status": "Closed",
+          "ticket_count": 215
+        },
+        {
+          "status": "Pending",
+          "ticket_count": 197
+        },
+        {
+          "status": "Open",
+          "ticket_count": 188
+        }
+      ]
+    },
+    "guarded_error": null,
+    "unguarded_sql": "SELECT status, COUNT(*) as ticket_count\nFROM support_tickets\nGROUP BY status\nORDER BY ticket_count DESC\nLIMIT 3",
+    "unguarded_result_summary": {
+      "shape": [
+        3,
+        2
+      ],
+      "columns": [
+        "status",
+        "ticket_count"
+      ],
+      "sample_rows": [
+        {
+          "status": "Closed",
+          "ticket_count": 215
+        },
+        {
+          "status": "Pending",
+          "ticket_count": 197
+        },
+        {
+          "status": "Open",
+          "ticket_count": 188
+        }
+      ]
+    },
+    "unguarded_error": null,
+    "ground_truth_sql": null,
+    "ground_truth_value": null,
+    "unguarded_actual_value": null,
+    "unguarded_correct": null,
+    "guarded_flagged": null,
+    "needs_manual_grading": false,
+    "manual_grade": "",
+    "final_verdict": null,
+    "possible_over_trigger": false,
+    "date_clock_bug": false
+  }
+]

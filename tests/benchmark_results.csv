@@ -1,0 +1,190 @@
+num,category,question,expected_behavior,note,guarded_outcome,guarded_warning,guarded_clarification,guarded_error,unguarded_sql,unguarded_error,ground_truth_sql,ground_truth_value,unguarded_actual_value,unguarded_correct,guarded_flagged,needs_manual_grading,manual_grade,final_verdict,possible_over_trigger,date_clock_bug
+1,clean,What was total revenue in 2024?,answer,"Clear metric (revenue), clear time bound. Baseline sanity check.",ANSWERED,,,,SELECT SUM(revenue) FROM orders WHERE order_date BETWEEN '2024-01-01' AND '2024-12-31',,,,,,,False,,,False,False
+2,clean,How many customers signed up in 2025?,answer,Simple filtered count on customers.signup_date.,ANSWERED,,,,"SELECT COUNT(*) FROM customers WHERE strftime('%Y', signup_date) = '2025'",,,,,,,False,,,False,False
+3,clean,What is the average order revenue?,answer,"Single aggregate over orders, no ranking or scope ambiguity.",ANSWERED,,,,SELECT AVG(revenue) FROM orders,,,,,,,False,,,False,False
+4,clean,How many support tickets are currently open?,answer,Simple filtered count on support_tickets.status.,ANSWERED,,,,SELECT COUNT(*) FROM support_tickets WHERE status = 'open',,,,,,,False,,,False,False
+5,clean,What was the total marketing spend in 2024?,answer,"Single-table aggregate on marketing_spend, no orders join involved.",ANSWERED,,,,SELECT SUM(amount_spent) FROM marketing_spend WHERE month LIKE '2024%',,,,,,,False,,,False,False
+6,clean,How many orders came through the Email channel?,answer,Filtered count on orders.channel; channel value is explicit.,ANSWERED,,,,SELECT COUNT(*) FROM orders WHERE channel = 'Email',,,,,,,False,,,False,False
+7,clean,How many customers are on the Enterprise plan?,answer,"Simple filtered count on customers.plan_tier, unambiguous.",ANSWERED,,,,SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise',,,,,,,False,,,False,False
+8,undefined_metric,Who are the top customers?,clarify,"""Top"" with no metric - by revenue? order count? tickets?",CLARIFIED,,"What metric would you like to use to rank the top customers? For example, would you like to rank by:
+1. **Total revenue** (sum of `revenue` from the `orders` table),
+2. **Number of orders** (count of `order_id` from the `orders` table), or
+3. **Number of support tickets** (count of `ticket_id` from the `support_tickets` table)?",,"SELECT customer_id, SUM(revenue) AS total_revenue
+FROM orders
+GROUP BY customer_id
+ORDER BY total_revenue DESC
+LIMIT 10",,,,,,,True,silently wrong,wrong,False,False
+9,undefined_metric,Which region performs best?,clarify,"""Best"" is undefined - revenue, customer count, retention?",CLARIFIED,,"What metric should be used to determine which region performs best? For example, would you like to rank regions by:
+1. **Total revenue** (sum of `revenue` from the `orders` table),
+2. **Number of orders** (count of orders from the `orders` table), or
+3. **Number of customers** (count of customers from the `customers` table)?",,"SELECT region, SUM(revenue) AS total_revenue
+FROM orders
+JOIN customers USING (customer_id)
+GROUP BY region
+ORDER BY total_revenue DESC
+LIMIT 1",,,,,,,True,silently wrong,wrong,False,False
+10,undefined_metric,What's the leading marketing channel?,clarify,"""Leading"" by spend, by orders attributed, by revenue?",CLARIFIED,,"What metric would you like to use to determine the leading marketing channel? For example, would you like to rank by: 1. **Total amount spent** (from `marketing_spend.amount_spent`), 2. **Total revenue generated** (from `orders.revenue`), or 3. **Number of orders placed** (count of `orders.order_id`)?",,"SELECT channel, SUM(amount_spent) AS total_spent
+FROM marketing_spend
+GROUP BY channel
+ORDER BY total_spent DESC
+LIMIT 1",,,,,,,True,silently wrong,wrong,False,False
+11,undefined_metric,Show me the worst month.,clarify,"""Worst"" with no metric and no dimension (revenue? tickets? spend?).",CLARIFIED,,"Could you clarify what you mean by ""worst month""? For example, are you looking for the month with the lowest revenue (from the `orders` table), the highest marketing spend (from the `marketing_spend` table), or the most support tickets created (from the `support_tickets` table)?",,"SELECT strftime('%Y-%m', order_date) AS month, SUM(revenue) AS total_revenue
+FROM orders
+GROUP BY month
+ORDER BY total_revenue ASC
+LIMIT 1",,,,,,,True,acceptable,correct,False,False
+12,undefined_metric,What's the top plan tier?,clarify,"""Top"" by customer count? by revenue per tier? unspecified.",CLARIFIED,,"What metric would you like to use to determine the ""top"" plan tier? For example, would you like to rank by:
+1. **Total revenue** (sum of `revenue` from the `orders` table),
+2. **Number of customers** (count of `customer_id` from the `customers` table), or
+3. **Number of orders** (count of `order_id` from the `orders` table)?",,"SELECT plan_tier, COUNT(*) as customer_count
+FROM customers
+GROUP BY plan_tier
+ORDER BY customer_count DESC
+LIMIT 1",,,,,,,True,silently wrong,wrong,False,False
+13,undefined_metric,Which support ticket status is highest?,clarify,"""Highest"" implies count, but that's assumed, not stated.",CLARIFIED,,"What metric would you like to use to determine which support ticket status is ""highest""? For example, would you like to rank by:
+1. **Number of tickets** (count of ticket_id per status),
+2. **Number of distinct customers** (count of unique customer_id per status), or
+3. **Most recent activity** (latest created_at date per status)?",,"SELECT status, COUNT(*) as count FROM support_tickets GROUP BY status ORDER BY count DESC LIMIT 1",,,,,,,True,acceptable,correct,False,False
+14,undefined_metric,What's the best-performing channel this year?,clarify,"""Best-performing"" by revenue, order count, or ROI is all plausible and unstated.",CLARIFIED,,"When you say ""best-performing channel,"" which metric would you like to rank by? For example, are you interested in: 1) **Total revenue** (sum of `revenue` from the `orders` table), 2) **Number of orders** (count of `order_id` from the `orders` table), or 3) **Marketing spend** (sum of `amount_spent` from the `marketing_spend` table)?",,"SELECT channel, SUM(revenue) AS total_revenue
+FROM orders
+WHERE strftime('%Y', order_date) = strftime('%Y', 'now')
+GROUP BY channel
+ORDER BY total_revenue DESC
+LIMIT 1",,,,,,,True,silently wrong,wrong,False,True
+15,out_of_scope,Show me everything in the database.,clarify,Textbook unbounded dump across all four tables.,CLARIFIED,,"This request is too broad to answer effectively — dumping the entire database would return all rows from all tables (customers, marketing_spend, orders, and support_tickets) with no filtering, aggregation, or focus.
+
+To make this actionable, could you narrow it down? Here are a few concrete suggestions:
+
+- **Specific table + filter**: e.g., ""Show me all orders from December 2024"" or ""List customers in the West region.""
+- **Aggregation**: e.g., ""Give me total revenue by channel"" or ""How many support tickets were created each month?""
+- **A limited preview**: e.g., ""Show me the first 10 rows of the orders table.""
+
+What are you most interested in exploring?",,SELECT * FROM customers,,,,,,,True,silently wrong,wrong,False,False
+16,out_of_scope,List all customers with full details.,clarify,"Every row, every column, no filter or aggregation.",CLARIFIED,,"This request asks for every row and all columns from the `customers` table with no filters, aggregations, or limits applied. This could return a very large, unmanageable result set.
+
+To make this more useful, could you scope it down? For example:
+- **Filter by region**: ""List all customers in the West region""
+- **Filter by plan tier**: ""Show all customers on the Pro plan tier""
+- **Filter by signup date**: ""List customers who signed up in 2024""
+- **Limit results**: ""Show the first 100 customers by signup date""
+- **Summarize**: ""Count customers by region and plan tier""
+
+Please add a filter, time range, limit, or aggregation and I'll get that query running for you!",,SELECT * FROM customers,,,,,,,True,acceptable,correct,True,False
+17,out_of_scope,"Give me every order for every customer, with all their support tickets.",clarify,"Unbounded multi-table row-level dump, no scoping.",CLARIFIED,,"This request asks for all orders joined with all support tickets across every customer, with no filters, time range, or aggregation applied. That could return an extremely large, unwieldy result set.
+
+To make this more manageable, could you scope it down a bit? Here are some concrete suggestions based on your schema:
+
+- **Filter by time range**: e.g., ""Give me all orders and support tickets from Q4 2024"" (using `order_date` or `created_at`)
+- **Filter by customer**: e.g., ""Show orders and support tickets for customer ID 1042""
+- **Filter by region or plan tier**: e.g., ""Show orders and support tickets for customers in the West region""
+- **Filter by ticket status**: e.g., ""Show orders alongside open support tickets""
+- **Aggregate instead**: e.g., ""Show total revenue and ticket count per customer""
+
+Which of these directions works for you, or do you have a different filter in mind?",,"SELECT o.order_id, o.order_date, o.revenue, o.channel, c.customer_id, c.region, c.plan_tier, c.signup_date, st.ticket_id, st.created_at, st.status
+FROM customers c
+LEFT JOIN orders o ON c.customer_id = o.customer_id
+LEFT JOIN support_tickets st ON c.customer_id = st.customer_id",,,,,,,True,silently wrong,wrong,False,False
+18,out_of_scope,Dump the entire orders table.,clarify,"Explicit unbounded single-table dump, no filter or aggregation.",CLARIFIED,,"This request asks for a full, unfiltered dump of the entire `orders` table, which could return a very large number of rows with no summarization or filtering. To keep the query manageable and meaningful, could you narrow it down? Here are a few suggestions:
+
+- **Filter by date range**: ""Show all orders from the last 3 months"" (filtering on `order_date`)
+- **Filter by channel**: ""Show all orders from the 'web' channel""
+- **Aggregate**: ""Show total revenue by channel"" or ""Show monthly order counts""
+- **Limit rows**: ""Show the 100 most recent orders""
+
+Please add a filter, time range, limit, or aggregation and I'll get that query built for you!",,SELECT * FROM orders,,,,,,,True,acceptable,correct,True,False
+19,out_of_scope,Show me every support ticket in full detail.,clarify,"Every row, every column, no filter or aggregation - same pattern, different table.",CLARIFIED,,"This request asks for every row in the `support_tickets` table with no filters, time range, or aggregation, which would be an unbounded data dump. Could you narrow it down a bit? Here are some suggestions:
+
+- **Filter by status**: e.g., ""Show me all open support tickets"" (`WHERE status = 'open'`)
+- **Filter by date range**: e.g., ""Show me support tickets created in the last 30 days"" (`WHERE created_at >= CURRENT_DATE - INTERVAL '30 days'`)
+- **Filter by customer**: e.g., ""Show me all support tickets for customer ID 123""
+- **Summarize**: e.g., ""How many support tickets are there by status?"" or ""Show me the number of tickets created per month""
+
+Please add a filter, time range, or aggregation and I'll be happy to help!",,SELECT * FROM support_tickets,,,,,,,True,acceptable,correct,True,False
+20,out_of_scope,Give me a complete export of all marketing spend records.,clarify,"""Complete export"" is an unbounded dump phrased as a business ask.",CLARIFIED,,"This request asks for a full, unfiltered export of all records in the `marketing_spend` table, which is too broad for the analytics copilot to handle without some scoping. To keep results meaningful and manageable, could you narrow it down? For example:
+
+- **Filter by channel**: ""Show all marketing spend for the 'paid_search' channel""
+- **Filter by time range**: ""Show marketing spend for Q1 2024""
+- **Aggregate**: ""Show total amount spent by channel"" or ""Show monthly marketing spend totals""
+- **Limit**: ""Show the top 10 largest marketing spend records""
+
+Please add a filter, time range, aggregation, or limit and I'll get that query built for you!",,SELECT * FROM marketing_spend,,,,,,,True,acceptable,correct,True,False
+21,granularity_mismatch,What is the total marketing spend associated with Email channel orders in 2024?,warn,Naive join fans the monthly Email spend out across every 2024 Email order and overcounts.,ANSWERED,,,,"SELECT SUM(ms.amount_spent)
+FROM marketing_spend ms
+WHERE ms.channel = 'Email'
+AND ms.month LIKE '2024%'",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Email' AND month LIKE '2024-%',146793.25999999998,146793.25999999998,True,False,False,,correct,False,False
+22,granularity_mismatch,What is the total marketing spend behind Paid Search channel orders in 2025?,warn,"Same trap, different channel/year.",ANSWERED,,,,"SELECT SUM(ms.amount_spent)
+FROM marketing_spend ms
+WHERE ms.channel = 'Paid Search'
+  AND ms.month LIKE '2025%'",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Paid Search' AND month LIKE '2025-%',155398.12,155398.12,True,False,False,,correct,False,False
+23,granularity_mismatch,What is the total marketing spend tied to Organic channel orders overall?,warn,No year filter - all-time version of the same trap.,ANSWERED,,,,"SELECT SUM(ms.amount_spent) AS total_spend
+FROM marketing_spend ms
+WHERE ms.channel = 'Organic'",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Organic',420617.47,420617.47,True,False,False,,correct,False,False
+24,granularity_mismatch,What is the total marketing spend that funded Referral channel orders in 2023?,warn,"Same trap, Referral channel, first year of data.",ANSWERED,,,,"SELECT SUM(ms.amount_spent) AS total_marketing_spend
+FROM marketing_spend ms
+WHERE ms.channel = 'Referral'
+  AND ms.month LIKE '2023%'",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Referral' AND month LIKE '2023-%',119655.12,119655.12,True,False,False,,correct,False,False
+25,granularity_mismatch,"Show each order alongside the marketing spend for its channel, and report the total spend involved.",warn,"Original per-order framing (invites a join) plus an explicit request for a total, so the answer is a single comparable number.",WARNED,"This query joins 'marketing_spend' (monthly grain, via marketing_spend.month) with 'orders' (daily grain, via orders.order_date) without an aggregation that reconciles the two - e.g. grouping the finer-grained side by a truncated date (strftime/substr) before comparing. Results may double-count or misalign values across the mismatched grains.",,,"SELECT o.order_id, o.customer_id, o.order_date, o.revenue, o.channel, SUM(ms.amount_spent) AS total_marketing_spend
+FROM orders o
+LEFT JOIN marketing_spend ms ON o.channel = ms.channel
+GROUP BY o.order_id, o.customer_id, o.order_date, o.revenue, o.channel",,SELECT SUM(amount_spent) FROM marketing_spend,1646602.9400000002,,,True,False,silently wrong,wrong,False,False
+26,granularity_mismatch,"Compare daily order revenue to marketing spend by channel, then report the total marketing spend for the Email channel in 2025.",warn,"Keeps the original daily-comparison framing that reliably invited a join in testing, narrowed to a scalar answer.",ANSWERED,,,,"SELECT SUM(amount_spent) AS total_email_spend_2025
+FROM marketing_spend
+WHERE channel = 'Email'
+  AND month LIKE '2025%'",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Email' AND month LIKE '2025-%',133415.18,133415.18,True,False,False,,correct,False,False
+27,granularity_mismatch,"List every order next to that month's marketing spend for its channel, then report the total spend shown for the Paid Search channel in 2024.",warn,"Same per-order listing framing as the original eval question, narrowed to a scalar answer.",CLARIFIED,,"Part of your request — ""list every order next to that month's marketing spend for its channel"" — asks for a full, unfiltered row-by-row dump of the orders table joined to marketing_spend, with no filters, aggregation, or limit applied. This could return an extremely large result set and is outside what the analytics copilot is designed to handle.
+
+**Suggestion:** Could you scope that first part down? For example:
+- **Filter by time range:** ""List orders from Q1 2024 next to that month's marketing spend for its channel.""
+- **Filter by channel:** ""List orders for the Paid Search channel next to that month's marketing spend.""
+- **Aggregate instead:** ""Show total revenue and total marketing spend by channel and month.""
+
+The second part of your request — total marketing spend for Paid Search in 2024 — is a well-scoped aggregation and is perfectly fine on its own. Feel free to add a scope to the first part and I'll run both together!",,"WITH order_spend AS (
+    SELECT
+        o.order_id,
+        o.customer_id,
+        o.order_date,
+        o.revenue,
+        o.channel,
+        ms.month,
+        ms.amount_spent AS monthly_channel_spend
+    FROM orders o
+    LEFT JOIN marketing_spend ms
+        ON o.channel = ms.channel
+        AND strftime('%Y-%m', o.order_date) = substr(ms.month, 1, 7)
+),
+paid_search_2024 AS (
+    SELECT SUM(amount_spent) AS total_paid_search_2024
+    FROM marketing_spend
+    WHERE channel = 'Paid Search'
+      AND substr(month, 1, 4) = '2024'
+)
+SELECT
+    os.*,
+    ps.total_paid_search_2024
+FROM order_spend os
+CROSS JOIN paid_search_2024 ps",,SELECT SUM(amount_spent) FROM marketing_spend WHERE channel = 'Paid Search' AND month LIKE '2024-%',107533.17000000001,,,False,False,acceptable,correct,False,False
+28,messy_categorical_filter,How many customers are in the West region?,warn,"The motivating bug for check_messy_categorical_filter: generated `WHERE region = 'West'` and returned 134, silently missing 'west'/'WEST'/'W' rows (184 is correct).",WARNED,"This query filters on 'customers.region' with an exact match (region = 'West'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('West'), or explicitly account for all known variants.",,,SELECT COUNT(*) FROM customers WHERE region = 'West',,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('WEST', 'W')",184,134,False,True,False,,wrong,False,False
+29,messy_categorical_filter,List customers in the East region.,warn,"Same undernormalized-filter risk as the West-region question, different region and phrasing (list vs. count).",WARNED,"This query filters on 'customers.region' with an exact match (region = 'East'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('East'), or explicitly account for all known variants.",,,"SELECT customer_id, signup_date, region, plan_tier FROM customers WHERE region = 'East'",,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('EAST', 'E')",186,139,False,True,False,,wrong,False,False
+30,messy_categorical_filter,How many customers signed up in the South region last year?,warn,Combines a region filter with a date filter - checks the guardrail still fires when region isn't the only WHERE clause.,WARNED,"This query filters on 'customers.region' with an exact match (region = 'South'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('South'), or explicitly account for all known variants.",,,"SELECT COUNT(*) FROM customers WHERE region = 'South' AND strftime('%Y', signup_date) = strftime('%Y', 'now', '-1 year')",,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('SOUTH', 'S') AND signup_date BETWEEN '2025-01-01' AND '2025-12-31'",66,44,False,True,False,,wrong,False,False
+31,messy_categorical_filter,How many customers are in the North region?,warn,"Same bug, North region.",WARNED,"This query filters on 'customers.region' with an exact match (region = 'North'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('North'), or explicitly account for all known variants.",,,SELECT COUNT(*) FROM customers WHERE region = 'North',,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('NORTH', 'N')",205,138,False,True,False,,wrong,False,False
+32,messy_categorical_filter,How many Pro-plan customers are in the West region?,warn,"Region filter combined with a second, unrelated (clean) filter on plan_tier.",WARNED,"This query filters on 'customers.region' with an exact match (region = 'West'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('West'), or explicitly account for all known variants.",,,SELECT COUNT(*) FROM customers WHERE plan_tier = 'Pro' AND region = 'West',,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('WEST', 'W') AND plan_tier = 'Pro'",23,13,False,True,False,,wrong,False,False
+33,messy_categorical_filter,How many customers signed up in the North region in 2024?,warn,Region filter combined with an explicit (not relative) year filter.,WARNED,"This query filters on 'customers.region' with an exact match (region = 'North'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('North'), or explicitly account for all known variants.",,,"SELECT COUNT(*) FROM customers WHERE region = 'North' AND strftime('%Y', signup_date) = '2024'",,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('NORTH', 'N') AND signup_date BETWEEN '2024-01-01' AND '2024-12-31'",69,47,False,True,False,,wrong,False,False
+34,messy_categorical_filter,How many Enterprise-plan customers are in the South region?,warn,"Same pattern as the West/Pro question, South region and a different plan tier.",WARNED,"This query filters on 'customers.region' with an exact match (region = 'South'), but that column contains inconsistent casing/whitespace in the data (different raw values that normalize to the same thing, e.g. 'West'/'west'/'WEST'). An exact match like this will silently miss the other variants and undercount. Normalize both sides of the comparison, e.g. LOWER(TRIM(region)) = LOWER('South'), or explicitly account for all known variants.",,,SELECT COUNT(*) FROM customers WHERE plan_tier = 'Enterprise' AND region = 'South',,"SELECT COUNT(*) FROM customers WHERE UPPER(TRIM(region)) IN ('SOUTH', 'S') AND plan_tier = 'Enterprise'",12,5,False,True,False,,wrong,False,False
+35,edge_case,How many orders don't have a channel recorded?,answer,Tests whether the generated SQL correctly uses 'channel IS NULL' rather than a broken equality check.,ANSWERED,,,,SELECT COUNT(*) FROM orders WHERE channel IS NULL OR channel = '',,,,,,,False,,,False,False
+36,edge_case,What was the top month for revenue?,answer,"Borderline for check_undefined_metric: uses ""top"" but the metric (revenue) IS specified, so this should NOT be flagged for clarification. Included to check for over-triggering.",ANSWERED,,,,"SELECT strftime('%Y-%m', order_date) AS month, SUM(revenue) AS total_revenue
+FROM orders
+GROUP BY month
+ORDER BY total_revenue DESC
+LIMIT 1",,,,,,,False,,,False,False
+37,edge_case,Which customers are most valuable?,clarify,"Genuinely borderline: ""most valuable"" strongly implies revenue but never says so. Could reasonably go either way - judge this one yourself rather than trusting the guessed expected_behavior.",CLARIFIED,,"When you say ""most valuable,"" which metric should be used to rank customers? For example, would you like to rank by: 1) **Total revenue** (sum of `revenue` from the `orders` table), 2) **Number of orders placed** (count of `order_id` from the `orders` table), or 3) **Number of support tickets submitted** (count of `ticket_id` from the `support_tickets` table)?",,"SELECT customer_id, SUM(revenue) AS total_revenue, COUNT(order_id) AS order_count
+FROM orders
+GROUP BY customer_id
+ORDER BY total_revenue DESC
+LIMIT 20",,,,,,,False,,,False,False
+38,edge_case,How many customers have never placed an order?,answer,"Clear question, but tests whether the generated SQL correctly handles the NOT IN / LEFT JOIN NULL pattern.",ANSWERED,,,,SELECT COUNT(*) FROM customers WHERE customer_id NOT IN (SELECT DISTINCT customer_id FROM orders),,,,,,,False,,,False,False
+39,edge_case,What's the average number of orders per customer?,answer,"Clear metric, but tests whether customers with zero orders are handled correctly in the denominator.",ANSWERED,,,,SELECT CAST(COUNT(order_id) AS REAL) / COUNT(DISTINCT customer_id) AS avg_orders_per_customer FROM orders,,,,,,,False,,,False,False
+40,edge_case,Show me the top 3 support ticket statuses by count.,answer,"Uses ""top"" but explicitly names the metric (""by count"") - should NOT trigger check_undefined_metric.",ANSWERED,,,,"SELECT status, COUNT(*) as ticket_count
+FROM support_tickets
+GROUP BY status
+ORDER BY ticket_count DESC
+LIMIT 3",,,,,,,False,,,False,False

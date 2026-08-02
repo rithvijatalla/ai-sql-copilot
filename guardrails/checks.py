@@ -76,7 +76,7 @@ def _run_judgment(
     """Force a structured yes/no + message judgment out of the model via a
     single required tool call, so the result is reliably parseable rather
     than free text that needs its own parsing heuristics."""
-    client = anthropic.Anthropic()
+    client = anthropic.Anthropic(timeout=90.0)
 
     tool = {
         "name": tool_name,
