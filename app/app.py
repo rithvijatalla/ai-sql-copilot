@@ -140,7 +140,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
 }
 
-.block-container { padding-top: 4rem; padding-bottom: 3rem; max-width: 760px; }
+.block-container { padding-top: 4.5rem; padding-bottom: 3rem; max-width: 760px; }
 
 /* ---- brand header ----
    Extra top margin on top of block-container's own padding: defensive
@@ -148,19 +148,19 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
    Streamlit's fixed top toolbar (in-app, or any hosting-provided chrome
    on top of that in a deployed context) - a few extra px of whitespace
    is cheap, a clipped header is not.
-   Title is sized as a hero heading (~3.25rem / 52px) - deliberately much
-   larger than any other text on the page - with the tagline, accent bar,
-   and surrounding spacing all scaled up to match rather than looking
-   cramped next to it. */
-.brand { display: flex; align-items: center; gap: 20px; padding-bottom: 2rem;
-    margin-top: 1rem; margin-bottom: 2.25rem; border-bottom: 1px solid rgba(232,163,61,0.16); }
-.brand-mark { width: 6px; height: 80px; border-radius: 3px; flex-shrink: 0;
+   Title is sized as a landing-page hero heading (4.5rem / 72px, well
+   past the 64px floor) - unmistakably the largest, boldest thing on the
+   page - with the tagline, accent bar, and surrounding spacing all
+   scaled up to match rather than looking cramped next to it. */
+.brand { display: flex; align-items: center; gap: 24px; padding-bottom: 2.5rem;
+    margin-top: 1.5rem; margin-bottom: 2.75rem; border-bottom: 1px solid rgba(232,163,61,0.16); }
+.brand-mark { width: 7px; height: 112px; border-radius: 4px; flex-shrink: 0;
     background: linear-gradient(180deg, #E8A33D, #C97F1E); }
-.brand-title { font-size: 3.25rem; font-weight: 800; letter-spacing: -0.03em;
+.brand-title { font-size: 4.5rem; font-weight: 800; letter-spacing: -0.03em;
     color: #E9ECF3; margin: 0; line-height: 1.1; }
 .brand-title .accent { color: #E8A33D; }
-.brand-subtitle { font-size: 1.15rem; font-weight: 500; color: #8A93AC;
-    letter-spacing: 0.01em; margin-top: 10px; }
+.brand-subtitle { font-size: 1.4rem; font-weight: 500; color: #8A93AC;
+    letter-spacing: 0.01em; margin-top: 14px; }
 
 /* ---- section headers inside cards ---- */
 .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 0.9rem; }
