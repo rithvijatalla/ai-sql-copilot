@@ -156,11 +156,20 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
     margin-top: 1.5rem; margin-bottom: 2.75rem; border-bottom: 1px solid rgba(232,163,61,0.16); }
 .brand-mark { width: 7px; height: 112px; border-radius: 4px; flex-shrink: 0;
     background: linear-gradient(180deg, #E8A33D, #C97F1E); }
-.brand-title { font-size: 4.5rem; font-weight: 800; letter-spacing: -0.03em;
-    color: #E9ECF3; margin: 0; line-height: 1.1; }
-.brand-title .accent { color: #E8A33D; }
-.brand-subtitle { font-size: 1.4rem; font-weight: 500; color: #8A93AC;
-    letter-spacing: 0.01em; margin-top: 14px; }
+/* !important throughout: Streamlit ships a scoped reset
+   (`.st-emotion-cache-<hash> p { font-size: inherit; ... }`) targeting
+   every <p> inside a markdown container, at specificity (0,1,1) - one
+   point higher than a bare class selector like `.brand-title` (0,1,0),
+   so it silently wins the cascade and the title/tagline fall back to the
+   browser default (16px). Confirmed by inspecting the live computed
+   CSSOM under streamlit==1.60.0 - reproduces cleanly, and the class hash
+   changes across Streamlit builds/versions, so matching it directly
+   isn't a stable fix; !important is. */
+.brand-title { font-size: 4.5rem !important; font-weight: 800 !important; letter-spacing: -0.03em !important;
+    color: #E9ECF3 !important; margin: 0 !important; line-height: 1.1 !important; }
+.brand-title .accent { color: #E8A33D !important; }
+.brand-subtitle { font-size: 1.4rem !important; font-weight: 500 !important; color: #8A93AC !important;
+    letter-spacing: 0.01em !important; margin-top: 14px !important; }
 
 /* ---- section headers inside cards ---- */
 .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 0.9rem; }
