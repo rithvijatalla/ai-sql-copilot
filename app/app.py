@@ -165,7 +165,7 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
    CSSOM under streamlit==1.60.0 - reproduces cleanly, and the class hash
    changes across Streamlit builds/versions, so matching it directly
    isn't a stable fix; !important is. */
-.brand-title { font-size: 4.5rem !important; font-weight: 800 !important; letter-spacing: -0.03em !important;
+.brand-title { font-size: 42px !important; font-weight: 700 !important; letter-spacing: -0.03em !important;
     color: #E9ECF3 !important; margin: 0 !important; line-height: 1.1 !important; }
 .brand-title .accent { color: #E8A33D !important; }
 .brand-subtitle { font-size: 1.4rem !important; font-weight: 500 !important; color: #8A93AC !important;
