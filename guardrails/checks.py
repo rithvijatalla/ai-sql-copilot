@@ -112,8 +112,16 @@ def _run_judgment(
     return None
 
 
-def check_undefined_metric(question: str, schema_description: str | None = None) -> str | None:
-    """Flag ranking/superlative questions that don't specify what to rank by."""
+def analyze_undefined_metric(question: str, schema_description: str | None = None) -> dict | None:
+    """Core detection shared by check_undefined_metric() (prose message,
+    for ask()/existing tests) and the interactive resolution UI (structured
+    candidate list) - one LLM call backing both, rather than two.
+
+    Returns {"message": str, "candidates": list[str]} if the question needs
+    metric clarification, else None. "candidates" is 2-4 short,
+    human-readable metric labels (e.g. "Total revenue") suitable for a
+    dropdown, grounded in the schema when one is provided.
+    """
     schema_hint = (
         f"\n\nThe active database schema, for grounding metric suggestions in "
         f"real columns:\n{schema_description}"
@@ -132,23 +140,64 @@ If a metric is explicitly named or unambiguously implied ("top customers by
 revenue", "worst month for support tickets"), there is no problem.
 
 If ranking language is used but no metric is specified or implied ("top
-customers", "best region", "leading channel"), flag it and draft a short
-clarifying question to ask the user, naming 2-3 plausible metric options
-that would fit the question. Ground those options in real, numeric-looking
-columns from the schema below if one is provided; otherwise suggest
-generically-plausible metrics.
+customers", "best region", "leading channel"), flag it, draft a short
+clarifying question to ask the user, AND list 2-4 short, human-readable
+candidate metric labels (e.g. "Total revenue", "Order count") that would
+fit the question. Ground both the clarifying question and the candidate
+labels in real, numeric-looking columns from the schema below if one is
+provided; otherwise suggest generically-plausible metrics.
 
 If the question doesn't use ranking/superlative language at all, there is no
 problem.{schema_hint}"""
 
-    return _run_judgment(
-        system_prompt=system_prompt,
-        question=question,
-        tool_name="report_metric_check",
-        tool_description="Report whether the question needs a clarifying question about which metric to rank by.",
-        flag_field="needs_clarification",
-        message_field="clarifying_question",
+    client = anthropic.Anthropic(timeout=90.0)
+    tool = {
+        "name": "report_metric_check",
+        "description": "Report whether the question needs a clarifying question about which metric to rank by.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "needs_clarification": {"type": "boolean"},
+                "clarifying_question": {"type": "string"},
+                "candidate_metrics": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "2-4 short candidate metric labels, e.g. 'Total revenue'.",
+                },
+            },
+            "required": ["needs_clarification", "clarifying_question", "candidate_metrics"],
+        },
+    }
+
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=512,
+        system=system_prompt,
+        output_config={"effort": "low"},
+        tools=[tool],
+        tool_choice={"type": "tool", "name": "report_metric_check"},
+        messages=[{"role": "user", "content": question}],
     )
+
+    tool_use = next((b for b in response.content if b.type == "tool_use"), None)
+    if tool_use is None:
+        # Model declined or didn't call the tool (e.g. refusal) - fail open
+        # rather than block the pipeline on an unrelated safety classifier.
+        return None
+
+    if not tool_use.input.get("needs_clarification"):
+        return None
+
+    return {
+        "message": tool_use.input.get("clarifying_question") or None,
+        "candidates": tool_use.input.get("candidate_metrics") or [],
+    }
+
+
+def check_undefined_metric(question: str, schema_description: str | None = None) -> str | None:
+    """Flag ranking/superlative questions that don't specify what to rank by."""
+    result = analyze_undefined_metric(question, schema_description)
+    return result["message"] if result else None
 
 
 def check_out_of_scope(question: str, schema_description: str | None = None) -> str | None:
@@ -296,9 +345,12 @@ def _has_reconciling_aggregation(sql: str) -> bool:
     return has_group_by and has_date_truncation
 
 
-def check_granularity_mismatch(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
-    """Flag SQL that joins two tables with different estimated date grains
-    (e.g. daily vs. monthly) without an aggregation that reconciles them."""
+def _find_granularity_mismatch(sql: str, db_path: str) -> dict | None:
+    """Core detection shared by check_granularity_mismatch() (prose
+    message) and get_granularity_mismatch_details() (structured, for the
+    interactive resolution UI). Returns the first mismatched pair found as
+    {"table_a", "col_a", "grain_a", "table_b", "col_b", "grain_b"}, or
+    None."""
     tables = _referenced_tables(sql, db_path)
     has_join = bool(re.search(r"\bjoin\b", sql, re.IGNORECASE))
     if len(tables) < 2 or not has_join:
@@ -320,17 +372,41 @@ def check_granularity_mismatch(sql: str, db_path: str = DEFAULT_DB_PATH) -> str 
         table_grains.items(), 2
     ):
         if grain_a != grain_b:
-            return (
-                f"This query joins '{table_a}' ({grain_a} grain, via "
-                f"{table_a}.{col_a}) with '{table_b}' ({grain_b} grain, via "
-                f"{table_b}.{col_b}) without an aggregation that reconciles "
-                f"the two - e.g. grouping the finer-grained side by a "
-                f"truncated date (strftime/substr) before comparing. Results "
-                f"may double-count or misalign values across the mismatched "
-                f"grains."
-            )
+            return {
+                "table_a": table_a,
+                "col_a": col_a,
+                "grain_a": grain_a,
+                "table_b": table_b,
+                "col_b": col_b,
+                "grain_b": grain_b,
+            }
 
     return None
+
+
+def check_granularity_mismatch(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
+    """Flag SQL that joins two tables with different estimated date grains
+    (e.g. daily vs. monthly) without an aggregation that reconciles them."""
+    mismatch = _find_granularity_mismatch(sql, db_path)
+    if not mismatch:
+        return None
+
+    return (
+        f"This query joins '{mismatch['table_a']}' ({mismatch['grain_a']} grain, via "
+        f"{mismatch['table_a']}.{mismatch['col_a']}) with '{mismatch['table_b']}' "
+        f"({mismatch['grain_b']} grain, via {mismatch['table_b']}.{mismatch['col_b']}) "
+        f"without an aggregation that reconciles the two - e.g. grouping the "
+        f"finer-grained side by a truncated date (strftime/substr) before "
+        f"comparing. Results may double-count or misalign values across the "
+        f"mismatched grains."
+    )
+
+
+def get_granularity_mismatch_details(sql: str, db_path: str = DEFAULT_DB_PATH) -> dict | None:
+    """Structured version of check_granularity_mismatch(), for the
+    interactive resolution UI: which two tables/columns/grains are
+    mismatched, without formatting it into prose."""
+    return _find_granularity_mismatch(sql, db_path)
 
 
 # ---------------------------------------------------------------------------
@@ -362,10 +438,15 @@ def _is_messy_column(db_path: str, table: str, column: str) -> bool:
     return any(len(variants) > 1 for variants in normalized_groups.values())
 
 
-def check_messy_categorical_filter(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
-    """Flag exact-match filters on columns that turn out to have
-    inconsistent casing/whitespace in the active dataset, where the
-    comparison isn't normalized on both sides."""
+def _find_messy_filter_match(sql: str, db_path: str) -> dict | None:
+    """Core detection shared by check_messy_categorical_filter() (prose
+    message) and get_messy_filter_details() (structured, for the
+    interactive resolution UI). Returns the first messy exact-match filter
+    found as {"table", "column", "value", "span", "matched_text"] - "span"
+    is the (start, end) character offset of the matched `column = 'value'`
+    text in `sql`, so a resolution can be applied with a precise substring
+    replace rather than re-matching against possibly-different SQL later.
+    Returns None if no messy filter is found."""
     tables = _referenced_tables(sql, db_path)
     if not tables:
         return None
@@ -396,16 +477,40 @@ def check_messy_categorical_filter(sql: str, db_path: str = DEFAULT_DB_PATH) -> 
                 col_name for col_name, col_type, _ in columns_by_table[table] if col_name.lower() == column.lower()
             )
             if _is_messy_column(db_path, table, real_column):
-                return (
-                    f"This query filters on '{table}.{real_column}' with an "
-                    f"exact match ({real_column} = '{value}'), but that column "
-                    f"contains inconsistent casing/whitespace in the data "
-                    f"(different raw values that normalize to the same thing, "
-                    f"e.g. 'West'/'west'/'WEST'). An exact match like this will "
-                    f"silently miss the other variants and undercount. "
-                    f"Normalize both sides of the comparison, e.g. "
-                    f"LOWER(TRIM({real_column})) = LOWER('{value}'), or "
-                    f"explicitly account for all known variants."
-                )
+                return {
+                    "table": table,
+                    "column": real_column,
+                    "value": value,
+                    "span": match.span(),
+                    "matched_text": match.group(0),
+                }
 
     return None
+
+
+def check_messy_categorical_filter(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
+    """Flag exact-match filters on columns that turn out to have
+    inconsistent casing/whitespace in the active dataset, where the
+    comparison isn't normalized on both sides."""
+    match = _find_messy_filter_match(sql, db_path)
+    if not match:
+        return None
+
+    return (
+        f"This query filters on '{match['table']}.{match['column']}' with an "
+        f"exact match ({match['column']} = '{match['value']}'), but that column "
+        f"contains inconsistent casing/whitespace in the data "
+        f"(different raw values that normalize to the same thing, "
+        f"e.g. 'West'/'west'/'WEST'). An exact match like this will "
+        f"silently miss the other variants and undercount. "
+        f"Normalize both sides of the comparison, e.g. "
+        f"LOWER(TRIM({match['column']})) = LOWER('{match['value']}'), or "
+        f"explicitly account for all known variants."
+    )
+
+
+def get_messy_filter_details(sql: str, db_path: str = DEFAULT_DB_PATH) -> dict | None:
+    """Structured version of check_messy_categorical_filter(), for the
+    interactive resolution UI: which table/column/value is affected,
+    without formatting it into prose."""
+    return _find_messy_filter_match(sql, db_path)

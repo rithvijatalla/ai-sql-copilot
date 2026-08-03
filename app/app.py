@@ -27,7 +27,14 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from pipeline.data_loader import delete_database, load_uploaded_files
-from pipeline.query_engine import DEFAULT_DB_PATH, ask
+from pipeline.interactive import (
+    DetectedIssues,
+    detect_issues,
+    granularity_resolution_options,
+    messy_filter_resolution_options,
+    resolve_and_ask,
+)
+from pipeline.query_engine import DEFAULT_DB_PATH
 from pipeline.schema_utils import get_schema_description
 
 
@@ -202,6 +209,14 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
 .guardrail-icon svg { width: 15px; height: 15px; color: #E8A33D; }
 .guardrail-title { font-weight: 700; font-size: 0.82rem; color: #E9ECF3; margin-bottom: 1px; }
 .guardrail-desc { font-size: 0.76rem; color: #8F98B0; line-height: 1.45; }
+
+/* ---- issue resolution cards (each wrapped in a native st.container(border=True),
+   not a custom div - Streamlit renders every st.markdown()/widget call as its own
+   isolated DOM node, so a hand-written <div> can't span across them) ---- */
+.issue-card-header { display: flex; align-items: center; gap: 9px; margin-bottom: 0.4rem; }
+.issue-card-header svg { width: 16px; height: 16px; color: #E8A33D; flex-shrink: 0; }
+.issue-card-title { font-weight: 700; font-size: 0.86rem; color: #E9ECF3; }
+.issue-card-message { font-size: 0.82rem; color: #A9B1C4; line-height: 1.5; margin-bottom: 0.6rem; }
 
 /* ---- misc polish ---- */
 div[data-testid="stMetric"] { background: rgba(255,255,255,0.025); border-radius: 10px;
@@ -393,6 +408,127 @@ def render_about_sidebar(is_demo: bool) -> None:
                         st.session_state["question_input"] = question
 
 
+_ISSUE_ORDER = ["undefined_metric", "out_of_scope", "granularity_mismatch", "messy_categorical_filter"]
+_ISSUE_ICON = {
+    "undefined_metric": _ICON_METRIC,
+    "out_of_scope": _ICON_SCOPE,
+    "granularity_mismatch": _ICON_GRANULARITY,
+    "messy_categorical_filter": _ICON_MESSY,
+}
+_ISSUE_TITLE = {
+    "undefined_metric": "Undefined metric",
+    "out_of_scope": "Out of scope",
+    "granularity_mismatch": "Granularity mismatch",
+    "messy_categorical_filter": "Messy categorical filter",
+}
+_RESOLVE_WIDGET_KEYS = [f"resolve_{issue_type}" for issue_type in _ISSUE_ORDER]
+
+
+def render_issue_card_header(issue_type: str, message: str) -> None:
+    st.markdown(
+        f'<div class="issue-card-header">{_ISSUE_ICON[issue_type]}'
+        f'<span class="issue-card-title">{html.escape(_ISSUE_TITLE[issue_type])}</span></div>'
+        f'<div class="issue-card-message">{html.escape(message)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_ask_result(result: dict) -> None:
+    if result["error"]:
+        render_callout("error", result["error"])
+    if result["result"] is not None:
+        render_result_table(result["result"])
+    if result["sql"]:
+        with st.expander("Generated SQL"):
+            st.code(result["sql"], language="sql")
+
+
+def render_resolution_and_result(detected: DetectedIssues) -> None:
+    """Renders every detected issue together in one block, each with its
+    own resolution widget (per the interactive resolution design - see
+    pipeline/interactive.py), plus a Run Query button once everything
+    that needs an explicit choice has one. Falls straight through to
+    running the query if nothing was detected."""
+    if not detected.has_issues:
+        with st.container(border=True):
+            render_section_header(_ICON_RESULTS, "Result")
+            with st.spinner("Running your query..."):
+                st.session_state["last_result"] = resolve_and_ask(detected, {})
+        render_ask_result(st.session_state["last_result"])
+        return
+
+    with st.container(border=True):
+        render_section_header(
+            _ICON_ALERT_WARNING,
+            f"{len(detected.issues)} issue{'s' if len(detected.issues) != 1 else ''} detected - resolve to continue",
+        )
+
+        resolutions: dict = {}
+        blocked = False
+
+        for issue_type in _ISSUE_ORDER:
+            if issue_type not in detected.issues:
+                continue
+            issue = detected.issues[issue_type]
+
+            with st.container(border=True):
+                render_issue_card_header(issue_type, issue["message"])
+
+                if issue_type == "out_of_scope":
+                    blocked = True
+
+                elif issue_type == "undefined_metric":
+                    choice = st.selectbox(
+                        "Metric",
+                        issue["candidates"],
+                        index=None,
+                        placeholder="Choose a metric...",
+                        key="resolve_undefined_metric",
+                        label_visibility="collapsed",
+                    )
+                    if choice is None:
+                        blocked = True
+                    else:
+                        resolutions["undefined_metric"] = choice
+
+                elif issue_type == "granularity_mismatch":
+                    options = granularity_resolution_options(issue)
+                    labels = dict(options)
+                    resolutions["granularity_mismatch"] = st.radio(
+                        "Granularity resolution",
+                        options=[value for value, _ in options],
+                        format_func=lambda v: labels[v],
+                        key="resolve_granularity_mismatch",
+                        label_visibility="collapsed",
+                    )
+
+                elif issue_type == "messy_categorical_filter":
+                    options = messy_filter_resolution_options(issue)
+                    labels = dict(options)
+                    resolutions["messy_categorical_filter"] = st.radio(
+                        "Messy filter resolution",
+                        options=[value for value, _ in options],
+                        format_func=lambda v: labels[v],
+                        key="resolve_messy_categorical_filter",
+                        label_visibility="collapsed",
+                    )
+
+        if "out_of_scope" in detected.issues:
+            st.caption("Rephrase your question above with a narrower scope, then ask again.")
+        elif blocked:
+            st.caption("Choose a metric above to continue.")
+            st.button("Run Query", type="primary", disabled=True, key="run_query_btn")
+        else:
+            if st.button("Run Query", type="primary", key="run_query_btn"):
+                with st.spinner("Running your resolved query..."):
+                    st.session_state["last_result"] = resolve_and_ask(detected, resolutions)
+
+    if st.session_state.get("last_result") is not None:
+        with st.container(border=True):
+            render_section_header(_ICON_RESULTS, "Result")
+            render_ask_result(st.session_state["last_result"])
+
+
 render_brand_header()
 
 db_path, is_demo = render_data_source()
@@ -419,25 +555,14 @@ with st.container(border=True):
 if submitted and ready:
     if not question.strip():
         render_callout("warning", "Enter a question first.")
+        st.session_state["detected"] = None
+        st.session_state["last_result"] = None
     else:
-        with st.spinner("Generating SQL and running guardrail checks..."):
-            result = ask(question, db_path=db_path)
+        for key in _RESOLVE_WIDGET_KEYS:
+            st.session_state.pop(key, None)
+        st.session_state["last_result"] = None
+        with st.spinner("Generating SQL and running all four guardrail checks..."):
+            st.session_state["detected"] = detect_issues(question, db_path=db_path)
 
-        with st.container(border=True):
-            render_section_header(_ICON_RESULTS, "Result")
-
-            if result["clarification_needed"]:
-                render_callout("info", result["clarification_needed"])
-            else:
-                if result["error"]:
-                    render_callout("error", result["error"])
-
-                if result["warning"]:
-                    render_callout("warning", result["warning"])
-
-                if result["result"] is not None:
-                    render_result_table(result["result"])
-
-                if result["sql"]:
-                    with st.expander("Generated SQL"):
-                        st.code(result["sql"], language="sql")
+if st.session_state.get("detected") is not None:
+    render_resolution_and_result(st.session_state["detected"])
