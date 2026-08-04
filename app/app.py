@@ -412,8 +412,10 @@ def render_data_profile(db_path: str) -> None:
     """Automatic, non-blocking data quality summary - row count, null % per
     column, full-row duplicate count, and messy columns (reusing
     guardrails.checks.is_messy_column) for every table in the active
-    dataset. Purely informational: always shown, never gates anything."""
-    with st.container(border=True):
+    dataset. Purely informational: never gates anything. Collapsed by
+    default (an st.expander rather than a plain container) so it doesn't
+    take up space until asked for."""
+    with st.expander("View data quality profile", expanded=False):
         render_section_header(_ICON_PROFILE, "Data quality profile")
 
         with st.spinner("Profiling dataset..."):
