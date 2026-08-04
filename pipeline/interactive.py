@@ -1,7 +1,7 @@
 """
 Interactive, structured guardrail resolution.
 
-detect_issues() runs all four guardrails against a question up front -
+detect_issues() runs all five guardrails against a question up front -
 rather than stopping at the first one that fires, the way ask() does - and
 returns every issue found, each with a resolution option where one makes
 sense. resolve_and_ask() takes the user's choices and folds them into a
@@ -13,12 +13,12 @@ ask() (and ask_unguarded()) remain exactly as they were, used by
 tests/run_benchmark.py and guardrails/test_checks.py. This module backs the
 interactive resolution UI in app/app.py specifically.
 
-granularity_mismatch/messy_categorical_filter only make sense to check
-against generated SQL, not the raw question - so detect_issues() generates
-a "draft" query unconditionally, purely to run those two checks against.
-That draft is thrown away and regenerated (possibly augmented by the
-user's resolution choices) once everything is resolved; it costs one extra
-SQL-generation call even on a perfectly clean question, which is the
+granularity_mismatch/messy_categorical_filter/bad_join only make sense to
+check against generated SQL, not the raw question - so detect_issues()
+generates a "draft" query unconditionally, purely to run those checks
+against. That draft is thrown away and regenerated (possibly augmented by
+the user's resolution choices) once everything is resolved; it costs one
+extra SQL-generation call even on a perfectly clean question, which is the
 tradeoff for surfacing every issue in one pass instead of round-tripping
 per issue.
 
@@ -26,6 +26,8 @@ Resolution values, keyed by issue type (matching DetectedIssues.issues):
   - undefined_metric: one of the candidate metric label strings.
   - messy_categorical_filter: "normalized" or "exact".
   - granularity_mismatch: "aggregate_finer" or "keep_finer".
+  - bad_join: "use_suggested" (only offered when a suggestion exists) or
+    "keep_original".
   - out_of_scope: no resolution value - see note on resolve_and_ask().
 """
 
@@ -36,6 +38,7 @@ import anthropic
 from guardrails.checks import (
     analyze_undefined_metric,
     check_out_of_scope,
+    get_bad_join_details,
     get_granularity_mismatch_details,
     get_messy_filter_details,
 )
@@ -60,7 +63,7 @@ class DetectedIssues:
 
 
 def detect_issues(question: str, db_path: str = DEFAULT_DB_PATH) -> DetectedIssues:
-    """Run all four guardrails against `question` and collect every issue
+    """Run all five guardrails against `question` and collect every issue
     found (unlike ask(), which stops at the first pre-generation issue)."""
     schema_description = get_schema_description(db_path)
 
@@ -104,6 +107,17 @@ def detect_issues(question: str, db_path: str = DEFAULT_DB_PATH) -> DetectedIssu
                     f"Filtering on '{messy['table']}.{messy['column']}' with an exact match on "
                     f"'{messy['value']}' - this column has inconsistent casing/whitespace in the data, "
                     f"so an exact match may silently miss some rows."
+                ),
+            }
+
+        bad_join = get_bad_join_details(draft_sql, db_path)
+        if bad_join:
+            issues["bad_join"] = {
+                **bad_join,
+                "message": (
+                    f"Joining '{bad_join['table_a']}.{bad_join['col_a']}' to "
+                    f"'{bad_join['table_b']}.{bad_join['col_b']}' doesn't look like a real relationship - "
+                    f"{'; '.join(bad_join['reasons'])}."
                 ),
             }
 
@@ -161,6 +175,45 @@ def messy_filter_resolution_options(details: dict) -> list[tuple[str, str]]:
             f"Exact match on '{details['value']}' only",
         ),
     ]
+
+
+def bad_join_resolution_options(details: dict) -> list[tuple[str, str]]:
+    """Returns [(value, label), ...] for the bad_join radio. "use_suggested"
+    is only offered (as the recommended, pre-selected default) when
+    check_bad_join found a better-overlapping, name-related column pair to
+    suggest; "keep_original" - running the join exactly as generated,
+    accepting the risk - is always offered, since unlike out_of_scope this
+    isn't a hard block, just a flagged risk."""
+    options = []
+    suggestion = details.get("suggestion")
+    if suggestion:
+        options.append(
+            (
+                "use_suggested",
+                f"Join on '{details['table_a']}.{suggestion['col_a']}' = "
+                f"'{details['table_b']}.{suggestion['col_b']}' instead (recommended, "
+                f"{suggestion['overlap_pct']}% value overlap)",
+            )
+        )
+    options.append(
+        (
+            "keep_original",
+            f"Run the original join on '{details['col_a']}' = '{details['col_b']}' as generated "
+            f"(results may be wrong, missing, or duplicated)",
+        )
+    )
+    return options
+
+
+def _augment_question_for_bad_join(question: str, details: dict, resolution: str) -> str:
+    suggestion = details["suggestion"]
+    instruction = (
+        f"When joining '{details['table_a']}' and '{details['table_b']}', use "
+        f"'{details['table_a']}.{suggestion['col_a']}' = '{details['table_b']}.{suggestion['col_b']}' as the "
+        f"join condition, not '{details['col_a']}' = '{details['col_b']}' - the latter doesn't represent a "
+        f"real relationship between these tables."
+    )
+    return f"{question.rstrip('?.! ')}. {instruction}"
 
 
 def _augment_question_for_metric(question: str, chosen_metric: str) -> str:
@@ -230,7 +283,11 @@ def resolve_and_ask(detected: DetectedIssues, resolutions: dict) -> dict:
     """
     result = {"question": detected.question, "sql": None, "result": None, "error": None}
 
-    needs_regeneration = "undefined_metric" in resolutions or "granularity_mismatch" in resolutions
+    needs_regeneration = (
+        "undefined_metric" in resolutions
+        or "granularity_mismatch" in resolutions
+        or resolutions.get("bad_join") == "use_suggested"
+    )
     if not needs_regeneration and detected.draft_sql:
         sql = detected.draft_sql
     else:
@@ -240,6 +297,10 @@ def resolve_and_ask(detected: DetectedIssues, resolutions: dict) -> dict:
         if "granularity_mismatch" in resolutions:
             question = _augment_question_for_granularity(
                 question, detected.issues["granularity_mismatch"], resolutions["granularity_mismatch"]
+            )
+        if resolutions.get("bad_join") == "use_suggested":
+            question = _augment_question_for_bad_join(
+                question, detected.issues["bad_join"], resolutions["bad_join"]
             )
 
         try:

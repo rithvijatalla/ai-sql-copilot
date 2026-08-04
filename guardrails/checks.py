@@ -51,6 +51,19 @@ column names.
    and undercount. This generalizes what was originally hardcoded to
    customers.region (see generate_synthetic_data.py) to any text column in
    any uploaded dataset.
+
+5. check_bad_join (post-generation, static analysis + data sample)
+   For every simple `table.column = table.column` condition inside a JOIN's
+   ON clause, checks whether the two columns look like a real relationship
+   rather than an arbitrary/coincidental match: do the names suggest a link
+   (matching, or one following the `<table>_id` convention), and do the
+   actual values meaningfully overlap. Two columns that just happen to
+   share a generic name (e.g. both called "id") but reference unrelated
+   entities are exactly the case name-matching alone would miss and
+   overlap alone would sometimes miss too (small integer PK ranges overlap
+   coincidentally) - this check combines both signals, plus a basic
+   declared-type compatibility check, and offers the best-overlapping
+   related-name column pair as a suggested fix when one exists.
 """
 
 import itertools
@@ -518,3 +531,225 @@ def get_messy_filter_details(sql: str, db_path: str = DEFAULT_DB_PATH) -> dict |
     interactive resolution UI: which table/column/value is affected,
     without formatting it into prose."""
     return _find_messy_filter_match(sql, db_path)
+
+
+# ---------------------------------------------------------------------------
+# check_bad_join - static SQL analysis + data-driven relationship validation
+# ---------------------------------------------------------------------------
+
+# Column names too generic to trust as evidence of a real relationship on
+# their own (e.g. two unrelated tables both happening to have an "id"
+# column) - a match on one of these needs value-overlap confirmation.
+_GENERIC_JOIN_COLUMN_NAMES = {"id", "key", "code", "name", "type", "value", "status"}
+
+_TABLE_OR_ALIAS_REF = re.compile(r"\b(?:FROM|JOIN)\s+(\w+)(?:\s+(?:AS\s+)?(\w+))?", re.IGNORECASE)
+_JOIN_ON_CLAUSE = re.compile(
+    r"\bJOIN\s+\w+(?:\s+(?:AS\s+)?\w+)?\s+ON\s+(.+?)"
+    r"(?=\bJOIN\b|\bWHERE\b|\bGROUP\s+BY\b|\bORDER\s+BY\b|\bLIMIT\b|\)|$)",
+    re.IGNORECASE | re.DOTALL,
+)
+_EQUI_JOIN_CONDITION = re.compile(r"(\w+)\.(\w+)\s*=\s*(\w+)\.(\w+)")
+
+
+def _is_numeric_type(declared_type: str) -> bool:
+    upper = (declared_type or "").upper()
+    return any(hint in upper for hint in ("INT", "REAL", "FLOA", "DOUB", "NUM"))
+
+
+def _table_alias_map(sql: str, known_tables: list[str]) -> dict[str, str]:
+    """Map every table-name/alias reference in FROM/JOIN clauses
+    (lowercased) to its real table name, for resolving qualified column
+    references like `o.channel` back to `orders`."""
+    known_lower = {t.lower(): t for t in known_tables}
+    alias_map: dict[str, str] = {}
+    for match in _TABLE_OR_ALIAS_REF.finditer(sql):
+        ref, alias = match.groups()
+        real_table = known_lower.get(ref.lower())
+        if not real_table:
+            continue
+        alias_map[ref.lower()] = real_table
+        if alias:
+            alias_map[alias.lower()] = real_table
+    return alias_map
+
+
+def _extract_equi_join_pairs(sql: str, db_path: str) -> list[dict]:
+    """Find simple `qualifier.column = qualifier.column` conditions inside
+    JOIN ... ON clauses, resolved to real (table, column) pairs on each
+    side. Conditions involving a function call (e.g.
+    `strftime(...) = ms.month`, the pattern check_granularity_mismatch
+    treats as a deliberately reconciled join), OR, or an
+    unqualified/unresolvable side are skipped - not something this check
+    can evaluate reliably, and not a plain "does this column match that
+    column" claim to begin with."""
+    known_tables = get_table_names(db_path)
+    alias_map = _table_alias_map(sql, known_tables)
+
+    pairs = []
+    for on_clause_match in _JOIN_ON_CLAUSE.finditer(sql):
+        on_clause = on_clause_match.group(1)
+        for cond_match in _EQUI_JOIN_CONDITION.finditer(on_clause):
+            qual_a, col_a, qual_b, col_b = cond_match.groups()
+            table_a = alias_map.get(qual_a.lower())
+            table_b = alias_map.get(qual_b.lower())
+            if not table_a or not table_b or table_a == table_b:
+                continue
+            pairs.append({"table_a": table_a, "col_a": col_a, "table_b": table_b, "col_b": col_b})
+    return pairs
+
+
+def _column_relates_to_table(column_name: str, table_name: str) -> bool:
+    """True if the table's name (singular or as-is) appears in the column
+    name - the standard `<table>_id`/`<table>_ref` FK-naming convention,
+    e.g. "customer_id" relating to table "customers"."""
+    col = column_name.lower()
+    table = table_name.lower()
+    table_singular = table[:-1] if table.endswith("s") else table
+    return table_singular in col or table in col
+
+
+def _names_relate(col_a: str, table_a: str, col_b: str, table_b: str) -> bool | None:
+    """True: the column names clearly suggest an intentional link. False:
+    they clearly don't. None: ambiguous - matching names, but too generic
+    (e.g. both just called "id") to be confident without checking whether
+    the actual values overlap too."""
+    same_name = col_a.lower() == col_b.lower()
+    generic = col_a.lower() in _GENERIC_JOIN_COLUMN_NAMES
+
+    if same_name and not generic:
+        return True
+    if _column_relates_to_table(col_a, table_b) or _column_relates_to_table(col_b, table_a):
+        return True
+    if same_name and generic:
+        return None
+    return False
+
+
+def _sample_value_set(db_path: str, table: str, column: str) -> set[str]:
+    values = _sample_column_values(db_path, table, column)
+    return {str(v).strip().lower() for v in values if v is not None}
+
+
+def _overlap_ratio(values_a: set, values_b: set) -> float:
+    if not values_a or not values_b:
+        return 0.0
+    return len(values_a & values_b) / min(len(values_a), len(values_b))
+
+
+def _suggest_join_columns(db_path: str, table_a: str, table_b: str) -> dict | None:
+    """Search every column pair between the two tables for one that looks
+    like the real relationship (related names, confirmed by meaningful
+    value overlap), to offer as a fix. Returns the best-overlapping
+    candidate, or None if nothing clearly better is found."""
+    columns_a = get_table_columns(db_path, table_a)
+    columns_b = get_table_columns(db_path, table_b)
+
+    best = None
+    for col_a, _, _ in columns_a:
+        for col_b, _, _ in columns_b:
+            if _names_relate(col_a, table_a, col_b, table_b) is not True:
+                continue
+            overlap = _overlap_ratio(
+                _sample_value_set(db_path, table_a, col_a),
+                _sample_value_set(db_path, table_b, col_b),
+            )
+            if overlap < 0.3:
+                continue
+            if best is None or overlap > best["overlap_pct"] / 100:
+                best = {"col_a": col_a, "col_b": col_b, "overlap_pct": round(overlap * 100, 1)}
+    return best
+
+
+def _find_bad_join(sql: str, db_path: str) -> dict | None:
+    """Core detection shared by check_bad_join() (prose message) and
+    get_bad_join_details() (structured, for the interactive resolution
+    UI). Returns the first suspicious join found, or None if every simple
+    equi-join in the SQL looks structurally sound."""
+    for pair in _extract_equi_join_pairs(sql, db_path):
+        table_a, col_a, table_b, col_b = pair["table_a"], pair["col_a"], pair["table_b"], pair["col_b"]
+
+        columns_a = get_table_columns(db_path, table_a)
+        columns_b = get_table_columns(db_path, table_b)
+        type_a = next((t for c, t, _ in columns_a if c.lower() == col_a.lower()), None)
+        type_b = next((t for c, t, _ in columns_b if c.lower() == col_b.lower()), None)
+        if type_a is None or type_b is None:
+            continue  # couldn't resolve to a real column - nothing to evaluate
+
+        type_mismatch = _is_numeric_type(type_a) != _is_numeric_type(type_b)
+        related = _names_relate(col_a, table_a, col_b, table_b)
+        values_a = _sample_value_set(db_path, table_a, col_a)
+        values_b = _sample_value_set(db_path, table_b, col_b)
+        overlap = _overlap_ratio(values_a, values_b)
+        low_cardinality = min(len(values_a), len(values_b)) < 5
+
+        # Built in the branch that actually triggered, not generically from
+        # every signal computed above - e.g. citing "only 100% overlap" as
+        # evidence of a *bad* join reads as self-contradictory, and it's
+        # exactly what happens when two small sequential integer id columns
+        # (like order_id and customer_id) coincidentally overlap despite
+        # naming that doesn't relate them at all. The name mismatch is the
+        # real reason in that case, not overlap.
+        reasons = []
+        if related is False:
+            reasons.append(f"the names don't suggest a link between '{table_a}' and '{table_b}'")
+        elif related is None and low_cardinality:
+            reasons.append(
+                f"both are just called '{col_a}', a name too generic to confirm a relationship on its "
+                f"own, and there isn't enough distinct data on either side to confirm a match from values alone"
+            )
+        elif related is None and overlap < 0.2:
+            reasons.append(
+                f"both are just called '{col_a}', a name too generic to confirm a relationship on its "
+                f"own, and only {round(overlap * 100, 1)}% of their values actually match"
+            )
+        if type_mismatch:
+            reasons.append(f"their declared types don't match ({type_a} vs {type_b})")
+
+        if not reasons:
+            continue
+
+        return {
+            "table_a": table_a,
+            "col_a": col_a,
+            "table_b": table_b,
+            "col_b": col_b,
+            "overlap_pct": round(overlap * 100, 1),
+            "type_mismatch": type_mismatch,
+            "reasons": reasons,
+            "suggestion": _suggest_join_columns(db_path, table_a, table_b),
+        }
+
+    return None
+
+
+def check_bad_join(sql: str, db_path: str = DEFAULT_DB_PATH) -> str | None:
+    """Flag SQL that joins two tables on columns that don't look like a
+    real relationship - unrelated names, barely-overlapping values, and/or
+    mismatched declared types - rather than a genuine primary/foreign-key
+    link."""
+    bad_join = _find_bad_join(sql, db_path)
+    if not bad_join:
+        return None
+
+    message = (
+        f"This query joins '{bad_join['table_a']}.{bad_join['col_a']}' to "
+        f"'{bad_join['table_b']}.{bad_join['col_b']}', but these columns don't look like a real "
+        f"relationship - {'; '.join(bad_join['reasons'])}. Joining on unrelated columns can silently "
+        f"return wrong, missing, or duplicated rows."
+    )
+
+    suggestion = bad_join["suggestion"]
+    if suggestion:
+        message += (
+            f" '{bad_join['table_a']}.{suggestion['col_a']}' and '{bad_join['table_b']}.{suggestion['col_b']}' "
+            f"look like a better match ({suggestion['overlap_pct']}% overlap)."
+        )
+
+    return message
+
+
+def get_bad_join_details(sql: str, db_path: str = DEFAULT_DB_PATH) -> dict | None:
+    """Structured version of check_bad_join(), for the interactive
+    resolution UI: which tables/columns are involved and the suggested
+    replacement (if any), without formatting it into prose."""
+    return _find_bad_join(sql, db_path)

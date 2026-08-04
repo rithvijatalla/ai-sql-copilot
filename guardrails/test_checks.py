@@ -1,14 +1,19 @@
 """
 Tests for guardrails/checks.py.
 
-check_granularity_mismatch and check_messy_categorical_filter are static SQL
-inspection plus a data sample, so most of them run against the bundled demo
-database (db/analytics.db, via each function's default db_path) with real
-SQL strings - no mocking needed. A second dataset ("alt_db_path" fixture,
-different table/column names, a different messy column, and a
-daily-vs-weekly rather than daily-vs-monthly grain mismatch) checks that the
-detection is genuinely data-driven and not secretly still keyed to
-"region"/"orders"/"marketing_spend".
+check_granularity_mismatch, check_messy_categorical_filter, and
+check_bad_join are static SQL inspection plus a data sample, so most of
+them run against the bundled demo database (db/analytics.db, via each
+function's default db_path) with real SQL strings - no mocking needed. A
+second dataset ("alt_db_path" fixture, different table/column names, a
+different messy column, and a daily-vs-weekly rather than
+daily-vs-monthly grain mismatch) checks that the detection is genuinely
+data-driven and not secretly still keyed to
+"region"/"orders"/"marketing_spend". check_bad_join gets its own second
+dataset ("join_db_path" fixture) with a deliberately ambiguous join
+scenario - two tables that each happen to have a generic "id" column,
+only one of which is the real relationship - since alt_db_path's tables
+don't have anything to join incorrectly on.
 
 check_undefined_metric and check_out_of_scope call an LLM. Their parsing and
 tool-forcing wiring is tested against a mocked Anthropic client (fast,
@@ -30,10 +35,12 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from guardrails.checks import (
+    check_bad_join,
     check_granularity_mismatch,
     check_messy_categorical_filter,
     check_out_of_scope,
     check_undefined_metric,
+    get_bad_join_details,
 )
 from pipeline.schema_utils import get_schema_description
 
@@ -263,6 +270,130 @@ def test_granularity_mismatch_allows_reconciled_daily_vs_weekly(alt_db_path):
 
 def test_granularity_mismatch_ignores_single_table_on_alt_dataset(alt_db_path):
     assert check_granularity_mismatch("SELECT * FROM transactions", alt_db_path) is None
+
+
+# ---------------------------------------------------------------------------
+# check_bad_join - static SQL inspection + data sample
+# ---------------------------------------------------------------------------
+
+
+def test_bad_join_flags_unrelated_id_columns_on_demo_dataset():
+    # orders.order_id and customers.customer_id are both real, unique ids -
+    # but for different entities. Neither name relates to the other table,
+    # which is the actual reason this is wrong (their raw values overlap
+    # heavily just because both happen to be small sequential integers
+    # starting at 1 - overlap alone would miss this).
+    sql = "SELECT * FROM orders o JOIN customers c ON o.order_id = c.customer_id"
+    warning = check_bad_join(sql)
+    assert warning is not None
+    assert "orders" in warning and "customers" in warning
+    assert "order_id" in warning and "customer_id" in warning
+
+
+def test_bad_join_suggests_the_real_relationship_on_demo_dataset():
+    sql = "SELECT * FROM orders o JOIN customers c ON o.order_id = c.customer_id"
+    details = get_bad_join_details(sql)
+    assert details is not None
+    assert details["suggestion"] == {"col_a": "customer_id", "col_b": "customer_id", "overlap_pct": pytest.approx(62.2, abs=1)}
+
+
+def test_bad_join_allows_customer_id_join_on_demo_dataset():
+    sql = "SELECT * FROM customers c JOIN orders o ON c.customer_id = o.customer_id"
+    assert check_bad_join(sql) is None
+
+
+def test_bad_join_allows_channel_join_on_demo_dataset():
+    # orders.channel = marketing_spend.channel is a real join in this schema
+    # (see check_granularity_mismatch's docstring/tests) despite neither
+    # side being a unique key - same-name relatedness should be enough on
+    # its own here.
+    sql = "SELECT * FROM orders o JOIN marketing_spend m ON o.channel = m.channel"
+    assert check_bad_join(sql) is None
+
+
+def test_bad_join_allows_support_ticket_join_on_demo_dataset():
+    sql = "SELECT * FROM customers c JOIN support_tickets t ON c.customer_id = t.customer_id"
+    assert check_bad_join(sql) is None
+
+
+def test_bad_join_ignores_reconciled_join_with_function_condition():
+    # The strftime(...) = ms.month condition isn't a plain column
+    # reference on the left, so it's skipped entirely rather than
+    # misjudged; the remaining plain o.channel = m.channel condition is a
+    # real relationship, so nothing here should be flagged.
+    sql = (
+        "SELECT strftime('%Y-%m', o.order_date) AS month, SUM(o.revenue), m.amount_spent "
+        "FROM orders o JOIN marketing_spend m "
+        "ON strftime('%Y-%m', o.order_date) = m.month AND o.channel = m.channel "
+        "GROUP BY month, o.channel"
+    )
+    assert check_bad_join(sql) is None
+
+
+def test_bad_join_ignores_queries_without_a_join():
+    assert check_bad_join("SELECT * FROM customers") is None
+
+
+@pytest.fixture
+def join_db_path(tmp_path):
+    """A deliberately ambiguous join scenario: products and reviews each
+    have their own "id" column (their own primary key), which share a
+    generic name but represent completely unrelated entities - the actual
+    foreign key is reviews.product_ref. Disjoint id ranges (products:
+    101-108, reviews: 1-15) mean products.id/reviews.id have zero real
+    overlap despite both being small sequential integers, unlike the demo
+    dataset's order_id/customer_id case where the ranges happen to
+    coincide."""
+    db_path = str(tmp_path / "join.db")
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("CREATE TABLE products (id INTEGER PRIMARY KEY, name TEXT NOT NULL, price REAL NOT NULL)")
+        products = [
+            (101, "Widget", 9.99),
+            (102, "Gadget", 19.99),
+            (103, "Gizmo", 29.99),
+            (104, "Doohickey", 14.99),
+            (105, "Thingamajig", 24.99),
+            (106, "Contraption", 34.99),
+            (107, "Doodad", 4.99),
+            (108, "Whatsit", 44.99),
+        ]
+        conn.executemany("INSERT INTO products (id, name, price) VALUES (?, ?, ?)", products)
+
+        conn.execute(
+            "CREATE TABLE reviews (id INTEGER PRIMARY KEY, product_ref INTEGER NOT NULL, rating INTEGER NOT NULL)"
+        )
+        reviews = [
+            (1, 101, 5), (2, 101, 4), (3, 102, 3), (4, 103, 5), (5, 103, 4),
+            (6, 104, 2), (7, 105, 5), (8, 106, 4), (9, 107, 3), (10, 108, 5),
+            (11, 101, 5), (12, 102, 4), (13, 103, 5), (14, 104, 3), (15, 105, 4),
+        ]
+        conn.executemany("INSERT INTO reviews (id, product_ref, rating) VALUES (?, ?, ?)", reviews)
+        conn.commit()
+    finally:
+        conn.close()
+    return db_path
+
+
+def test_bad_join_flags_ambiguous_same_name_id_columns(join_db_path):
+    sql = "SELECT * FROM products p JOIN reviews r ON p.id = r.id"
+    warning = check_bad_join(sql, join_db_path)
+    assert warning is not None
+    assert "products" in warning and "reviews" in warning
+
+
+def test_bad_join_suggests_product_ref_for_ambiguous_dataset(join_db_path):
+    sql = "SELECT * FROM products p JOIN reviews r ON p.id = r.id"
+    details = get_bad_join_details(sql, join_db_path)
+    assert details is not None
+    assert details["suggestion"]["col_a"] == "id"
+    assert details["suggestion"]["col_b"] == "product_ref"
+    assert details["suggestion"]["overlap_pct"] == 100.0
+
+
+def test_bad_join_allows_the_real_relationship_on_ambiguous_dataset(join_db_path):
+    sql = "SELECT * FROM products p JOIN reviews r ON p.id = r.product_ref"
+    assert check_bad_join(sql, join_db_path) is None
 
 
 # ---------------------------------------------------------------------------

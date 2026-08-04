@@ -26,6 +26,7 @@ if str(BASE_DIR) not in sys.path:
     sys.path.insert(0, str(BASE_DIR))
 
 from guardrails.checks import (
+    check_bad_join,
     check_granularity_mismatch,
     check_messy_categorical_filter,
     check_out_of_scope,
@@ -144,6 +145,7 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
         for w in (
             check_granularity_mismatch(sql, db_path),
             check_messy_categorical_filter(sql, db_path),
+            check_bad_join(sql, db_path),
         )
         if w
     ]
@@ -158,7 +160,7 @@ def ask(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
 
 
 def ask_unguarded(question: str, db_path: str = DEFAULT_DB_PATH) -> dict:
-    """Same as ask(), but skips all four guardrail checks entirely: question
+    """Same as ask(), but skips all five guardrail checks entirely: question
     -> generate SQL -> execute -> return, regardless of ambiguity or data
     quality issues.
 

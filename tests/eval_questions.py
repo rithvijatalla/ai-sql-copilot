@@ -25,7 +25,7 @@ categories carries a `ground_truth` field: a hand-written reference SQL
 query, independent of anything the LLM might generate, that computes the
 objectively correct answer. tests/run_benchmark.py executes this query
 directly against the database and compares it to what the *unguarded*
-pipeline (ask_unguarded(), which skips all four guardrails) actually
+pipeline (ask_unguarded(), which skips all five guardrails) actually
 returns, so these two categories can be graded automatically rather than by
 hand.
 
@@ -49,6 +49,22 @@ guarded-vs-unguarded accuracy); undefined_metric/out_of_scope require a
 human judgment call ("was the LLM's silent default reasonable or
 misleading?") that no reference query can settle, so run_benchmark.py
 surfaces those side by side for manual grading instead.
+
+check_bad_join (guardrails/checks.py) deliberately has no eval_questions
+entry and isn't wired into run_benchmark.py's categories. Every other
+category here was included because a specific natural-language question
+reliably reproduces the issue via live SQL generation - verified
+empirically before adding it. check_bad_join doesn't have one: a
+competently-schemed database gives the model enough signal (clear column
+names, a coherent schema description) that it doesn't generate
+structurally nonsensical joins from ordinary questions, even against a
+deliberately ambiguous demo schema built specifically to try to trip it up
+(two tables that both happen to have a generic "id" column - see
+guardrails/test_checks.py's join_db_path fixture). Forcing an eval
+question in here would just be flaky. check_bad_join is covered instead by
+direct unit tests against hand-crafted SQL (both the demo dataset and
+join_db_path), the same way check_granularity_mismatch/
+check_messy_categorical_filter's static-analysis logic is tested.
 """
 
 EVAL_QUESTIONS = [

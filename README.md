@@ -10,7 +10,7 @@ It ships with a small, deliberately messy synthetic "demo dataset"
 (inconsistent region casing, null marketing channels, a daily-vs-monthly
 grain mismatch between two tables) so the guardrails have something to catch
 out of the box. You can also upload your own CSV/Excel file(s) instead — the
-schema, the SQL generation, and all four guardrails are fully data-driven and
+schema, the SQL generation, and all five guardrails are fully data-driven and
 don't hardcode anything about the demo dataset's table or column names. The
 point of this project isn't just wiring an LLM up to a database — it's
 demonstrating what has to be true around that wiring for the answers to be
@@ -31,7 +31,7 @@ check_undefined_metric / check_out_of_scope   (pre-generation guardrails, ground
 generate_sql()                                 (Claude → SQL SELECT statement)
    │
    ▼
-check_granularity_mismatch / check_messy_categorical_filter   (post-generation guardrails, sample the active data)
+check_granularity_mismatch / check_messy_categorical_filter / check_bad_join   (post-generation guardrails, sample the active data)
    │  issue found? → still execute, but attach a warning
    ▼
 execute_sql_readonly()                         (runs against a read-only connection)
@@ -121,7 +121,7 @@ python3 generate_synthetic_data.py
 
 ## The guardrails
 
-All four guardrails are **data-driven**: none of them hardcode a table or
+All five guardrails are **data-driven**: none of them hardcode a table or
 column name. They introspect and sample whichever database is active — the
 demo dataset or an uploaded one — at check time.
 
@@ -131,6 +131,7 @@ demo dataset or an uploaded one — at check time.
 | `check_out_of_scope` | before SQL generation | LLM judgment, grounded in the active schema | Unbounded dumps ("show me everything") or full per-row detail requested with no filter or aggregation. |
 | `check_granularity_mismatch` | after SQL generation | static SQL analysis + data sample | Queries that join two tables whose date columns have different *estimated* grains (daily/weekly/monthly, inferred from the minimum gap between each table's sorted distinct dates) without an aggregation that reconciles them. |
 | `check_messy_categorical_filter` | after SQL generation | static SQL analysis + data sample | Exact-match filters (e.g. `region = 'West'`) on a column whose *actual distinct values* contain case/whitespace variants that collapse to the same normalized value — auto-detected per column, not limited to `region`. |
+| `check_bad_join` | after SQL generation | static SQL analysis + data sample | Joins on columns that don't look like a real relationship — unrelated names, barely-overlapping actual values, and/or mismatched declared types — rather than a genuine primary/foreign-key link. Offers the best-overlapping, name-related column pair as a suggested fix when one exists. |
 
 The two LLM-backed checks need semantic judgment — "top 5 customers by
 revenue" and "top 5 customers" differ only in whether a metric appears
@@ -139,11 +140,12 @@ system prompts are passed the active schema description so clarifying
 questions and scoping suggestions name real tables/columns from whatever
 dataset is loaded, rather than a fixed example schema.
 
-The two post-generation checks are static analysis over the generated SQL
+The three post-generation checks are static analysis over the generated SQL
 (which tables it joins, which columns it filters on with an unnormalized
 exact match) combined with a small data sample from the active database —
-enough to estimate a table's date grain or detect that a column has
-inconsistent casing, without needing a model call. See the module docstring
+enough to estimate a table's date grain, detect that a column has
+inconsistent casing, or check whether a join's columns actually correspond
+to each other, without needing a model call. See the module docstring
 in `guardrails/checks.py` for the detection algorithm in full.
 
 Pre-generation checks short-circuit the pipeline entirely (`sql` stays
@@ -238,7 +240,7 @@ the demo dataset or upload a different set of files.
 
 Once loaded, an expander shows the detected schema (table names, column
 names, inferred SQLite types), and questions are answered against that
-database exactly like the demo dataset — including all four guardrails,
+database exactly like the demo dataset — including all five guardrails,
 which re-run their table/column/date-grain detection against whatever you
 uploaded. The demo dataset's example question buttons are demo-only (they
 reference `region`, `orders`, `marketing_spend`, etc. by name) and are

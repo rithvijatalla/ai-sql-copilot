@@ -29,6 +29,7 @@ if str(BASE_DIR) not in sys.path:
 from pipeline.data_loader import delete_database, load_uploaded_files
 from pipeline.interactive import (
     DetectedIssues,
+    bad_join_resolution_options,
     detect_issues,
     granularity_resolution_options,
     messy_filter_resolution_options,
@@ -93,6 +94,7 @@ _ICON_METRIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 _ICON_SCOPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v4M2 6h4"/><path d="M18 2v4M22 6h-4"/><path d="M6 22v-4M2 18h4"/><path d="M18 22v-4M22 18h-4"/></svg>'
 _ICON_GRANULARITY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>'
 _ICON_MESSY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,4 20,4 14,12 14,19 10,17 10,12"/></svg>'
+_ICON_BAD_JOIN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7H6a4 4 0 0 0 0 8h1"/><path d="M15 17h3a4 4 0 0 0 0-8h-1"/><line x1="8" y1="12" x2="10" y2="12"/><line x1="14" y1="12" x2="16" y2="12"/></svg>'
 
 _ICON_ALERT_INFO = _ICON_INFO
 _ICON_ALERT_WARNING = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20L12 3z"/><line x1="12" y1="9" x2="12" y2="14"/><circle cx="12" cy="17" r="0.6" fill="currentColor" stroke="none"/></svg>'
@@ -124,6 +126,11 @@ GUARDRAIL_INFO = [
         _ICON_MESSY,
         "Messy categorical filter",
         "Exact-match filters on columns whose values have inconsistent casing or whitespace in the data.",
+    ),
+    (
+        _ICON_BAD_JOIN,
+        "Bad join",
+        "Joins on columns that don't look like a real relationship - unrelated names, barely-overlapping values, or mismatched types.",
     ),
 ]
 
@@ -448,7 +455,7 @@ def render_about_sidebar(is_demo: bool) -> None:
             render_section_header(_ICON_INFO, "About")
             st.markdown(
                 "Answers questions over either the demo dataset or data you "
-                "upload. Every generated query is checked against four "
+                "upload. Every generated query is checked against five "
                 "guardrails, auto-detected from whichever dataset is active:"
             )
             items_html = "".join(
@@ -471,18 +478,26 @@ def render_about_sidebar(is_demo: bool) -> None:
                         st.session_state["question_input"] = question
 
 
-_ISSUE_ORDER = ["undefined_metric", "out_of_scope", "granularity_mismatch", "messy_categorical_filter"]
+_ISSUE_ORDER = [
+    "undefined_metric",
+    "out_of_scope",
+    "granularity_mismatch",
+    "messy_categorical_filter",
+    "bad_join",
+]
 _ISSUE_ICON = {
     "undefined_metric": _ICON_METRIC,
     "out_of_scope": _ICON_SCOPE,
     "granularity_mismatch": _ICON_GRANULARITY,
     "messy_categorical_filter": _ICON_MESSY,
+    "bad_join": _ICON_BAD_JOIN,
 }
 _ISSUE_TITLE = {
     "undefined_metric": "Undefined metric",
     "out_of_scope": "Out of scope",
     "granularity_mismatch": "Granularity mismatch",
     "messy_categorical_filter": "Messy categorical filter",
+    "bad_join": "Bad join",
 }
 _RESOLVE_WIDGET_KEYS = [f"resolve_{issue_type}" for issue_type in _ISSUE_ORDER]
 
@@ -576,6 +591,17 @@ def render_resolution_and_result(detected: DetectedIssues) -> None:
                         label_visibility="collapsed",
                     )
 
+                elif issue_type == "bad_join":
+                    options = bad_join_resolution_options(issue)
+                    labels = dict(options)
+                    resolutions["bad_join"] = st.radio(
+                        "Bad join resolution",
+                        options=[value for value, _ in options],
+                        format_func=lambda v: labels[v],
+                        key="resolve_bad_join",
+                        label_visibility="collapsed",
+                    )
+
         if "out_of_scope" in detected.issues:
             st.caption("Rephrase your question above with a narrower scope, then ask again.")
         elif blocked:
@@ -632,7 +658,7 @@ if submitted and ready:
         for key in _RESOLVE_WIDGET_KEYS:
             st.session_state.pop(key, None)
         st.session_state["last_result"] = None
-        with st.spinner("Generating SQL and running all four guardrail checks..."):
+        with st.spinner("Generating SQL and running all five guardrail checks..."):
             st.session_state["detected"] = detect_issues(question, db_path=db_path)
 
 if st.session_state.get("detected") is not None:
