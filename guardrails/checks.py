@@ -421,14 +421,18 @@ def _normalize_text(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip().lower())
 
 
-def _is_text_type(declared_type: str) -> bool:
+def is_text_type(declared_type: str) -> bool:
     upper = (declared_type or "").upper()
     return upper == "" or "CHAR" in upper or "TEXT" in upper or "CLOB" in upper
 
 
-def _is_messy_column(db_path: str, table: str, column: str) -> bool:
+def is_messy_column(db_path: str, table: str, column: str) -> bool:
     """A column is 'messy' if two or more of its distinct raw values
-    collapse to the same case/whitespace-normalized form."""
+    collapse to the same case/whitespace-normalized form.
+
+    Public (not just used internally by _find_messy_filter_match): also
+    the detection pipeline/profiling.py reuses to flag messy columns
+    proactively, independent of whether any SQL filters on them yet."""
     values = _sample_column_values(db_path, table, column)
     normalized_groups: dict[str, set[str]] = {}
     for value in values:
@@ -456,7 +460,7 @@ def _find_messy_filter_match(sql: str, db_path: str) -> dict | None:
     column_to_tables: dict[str, list[str]] = {}
     for table, columns in columns_by_table.items():
         for col_name, col_type, _ in columns:
-            if _is_text_type(col_type):
+            if is_text_type(col_type):
                 column_to_tables.setdefault(col_name.lower(), []).append(table)
 
     for match in _EXACT_MATCH_FILTER.finditer(sql):
@@ -476,7 +480,7 @@ def _find_messy_filter_match(sql: str, db_path: str) -> dict | None:
             real_column = next(
                 col_name for col_name, col_type, _ in columns_by_table[table] if col_name.lower() == column.lower()
             )
-            if _is_messy_column(db_path, table, real_column):
+            if is_messy_column(db_path, table, real_column):
                 return {
                     "table": table,
                     "column": real_column,

@@ -34,6 +34,7 @@ from pipeline.interactive import (
     messy_filter_resolution_options,
     resolve_and_ask,
 )
+from pipeline.profiling import TableProfile, profile_dataset
 from pipeline.query_engine import DEFAULT_DB_PATH
 from pipeline.schema_utils import get_schema_description
 
@@ -86,6 +87,7 @@ _ICON_DATABASE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 _ICON_SEARCH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>'
 _ICON_RESULTS = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="12" width="3.5" height="8"/><rect x="10.25" y="7" width="3.5" height="13"/><rect x="16.5" y="3" width="3.5" height="17"/></svg>'
 _ICON_INFO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="0.6" fill="currentColor" stroke="none"/></svg>'
+_ICON_PROFILE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>'
 
 _ICON_METRIC = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,17 9,11 13,15 21,7"/><polyline points="14,7 21,7 21,14"/></svg>'
 _ICON_SCOPE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2v4M2 6h4"/><path d="M18 2v4M22 6h-4"/><path d="M6 22v-4M2 18h4"/><path d="M18 22v-4M22 18h-4"/></svg>'
@@ -189,6 +191,15 @@ html, body, .stApp, [data-testid="stAppViewContainer"], [data-testid="stSidebar"
     font-size: 0.78rem; font-weight: 600; color: #E8A33D; white-space: nowrap; margin-top: 6px; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: #E8A33D;
     box-shadow: 0 0 6px rgba(232,163,61,0.85); flex-shrink: 0; }
+
+/* ---- data profile card ---- */
+.profile-table-item { padding: 0.65rem 0; border-bottom: 1px solid rgba(255,255,255,0.06); }
+.profile-table-item:last-child { border-bottom: none; padding-bottom: 0; }
+.profile-table-name { font-weight: 700; font-size: 0.85rem; color: #E9ECF3; }
+.profile-table-rows { font-size: 0.76rem; color: #8A93AC; margin-left: 6px; }
+.profile-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 5px; }
+.profile-stat { font-size: 0.76rem; color: #8F98B0; }
+.profile-stat.flagged { color: #E8A33D; }
 
 /* ---- callouts (replace default st.error/warning/info chrome) ---- */
 .callout { display: flex; gap: 10px; padding: 0.85rem 1rem; border-radius: 10px;
@@ -379,6 +390,58 @@ def render_data_source() -> tuple[str, bool]:
         return db_path, False
 
 
+@st.cache_data(show_spinner=False)
+def _cached_profile_dataset(db_path: str) -> list[TableProfile]:
+    """Cached so profiling (a real scan of every table/column) doesn't
+    re-run on every Streamlit rerun (e.g. typing in the question box) - only
+    when the active db_path actually changes. Safe to key on db_path alone:
+    the demo dataset's path is fixed, and every upload gets a fresh temp
+    file path (see pipeline/data_loader.py), so the same path never means
+    different underlying data."""
+    return profile_dataset(db_path)
+
+
+def render_data_profile(db_path: str) -> None:
+    """Automatic, non-blocking data quality summary - row count, null % per
+    column, full-row duplicate count, and messy columns (reusing
+    guardrails.checks.is_messy_column) for every table in the active
+    dataset. Purely informational: always shown, never gates anything."""
+    with st.container(border=True):
+        render_section_header(_ICON_PROFILE, "Data quality profile")
+
+        with st.spinner("Profiling dataset..."):
+            profiles = _cached_profile_dataset(db_path)
+
+        items_html = []
+        for tp in profiles:
+            stats = []
+
+            null_columns = [c for c in tp.columns if c.null_pct > 0]
+            if null_columns:
+                null_text = ", ".join(f"{c.name} {c.null_pct:g}%" for c in null_columns)
+                stats.append(f'<span class="profile-stat flagged">Nulls: {html.escape(null_text)}</span>')
+            else:
+                stats.append('<span class="profile-stat">No missing values</span>')
+
+            dup_class = " flagged" if tp.duplicate_row_count > 0 else ""
+            stats.append(f'<span class="profile-stat{dup_class}">Duplicate rows: {tp.duplicate_row_count}</span>')
+
+            messy_columns = tp.messy_columns
+            if messy_columns:
+                messy_text = ", ".join(messy_columns)
+                stats.append(f'<span class="profile-stat flagged">Messy: {html.escape(messy_text)}</span>')
+
+            items_html.append(
+                f'<div class="profile-table-item">'
+                f'<span class="profile-table-name">{html.escape(tp.table)}</span>'
+                f'<span class="profile-table-rows">{tp.row_count:,} rows</span>'
+                f'<div class="profile-stats">{"".join(stats)}</div>'
+                f"</div>"
+            )
+
+        st.markdown("".join(items_html), unsafe_allow_html=True)
+
+
 def render_about_sidebar(is_demo: bool) -> None:
     with st.sidebar:
         with st.container(border=True):
@@ -535,6 +598,14 @@ db_path, is_demo = render_data_source()
 render_about_sidebar(is_demo)
 
 ready = bool(db_path) and render_setup_check(db_path)
+
+# Profiling requires the database to actually exist and be queryable, which
+# is exactly what render_setup_check() just verified for the demo dataset
+# case (an upload's db_path is only ever set after the file was already
+# loaded successfully, but the demo path is returned unconditionally even
+# if db/analytics.db hasn't been generated yet).
+if ready:
+    render_data_profile(db_path)
 
 with st.container(border=True):
     render_section_header(_ICON_SEARCH, "Ask a question")
