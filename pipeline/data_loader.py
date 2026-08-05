@@ -78,7 +78,16 @@ def load_uploaded_files(files) -> str:
                     f"Unsupported file type for '{uploaded_file.name}' - "
                     "only .csv, .xlsx, and .xls are supported."
                 )
-    finally:
+    except Exception:
+        # Partial failure (e.g. a malformed file later in the list) would
+        # otherwise leak this temp file on disk forever - the caller never
+        # gets db_path back to clean it up themselves, since we're about to
+        # raise instead of return. Delete it ourselves, then let the
+        # original exception propagate unchanged.
+        conn.close()
+        delete_database(db_path)
+        raise
+    else:
         conn.close()
 
     return db_path
