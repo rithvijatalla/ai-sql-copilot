@@ -301,6 +301,25 @@ fixture). Non-deterministic outcomes (a handful of borderline questions
 that can reasonably go either way) were reviewed against the documented
 expected behavior in `tests/eval_questions.py` rather than auto-graded.
 
+## Guardrail impact
+
+To measure whether the guardrails actually matter, every question in the
+evaluation suite was run twice: once through the guarded pipeline, once
+through an identical pipeline with all four guardrails active at the time
+disabled (the benchmark predates `check_bad_join`, the fifth guardrail,
+which is validated separately — see above). Answers were checked against
+hand-written ground-truth queries (for granularity and categorical-filter
+issues) or graded by hand (for undefined-metric and scope issues).
+
+**Without guardrails, 56% of gradable questions (15/27) received a wrong
+or misleading answer — delivered silently, with no indication anything
+was off. With guardrails, 100% of those wrong answers were caught**,
+either flagged with a warning or intercepted with a clarifying question
+before any SQL ran.
+
+Full methodology, caveats, and per-question results:
+[`tests/benchmark_summary.md`](tests/benchmark_summary.md)
+
 ## Model
 
 Uses `claude-sonnet-4-6` for both SQL generation and the LLM-backed
