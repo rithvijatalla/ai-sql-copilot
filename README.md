@@ -287,29 +287,26 @@ judges correctness on its own):
 python3 tests/run_eval.py
 ```
 
-Validated against this 40-question hand-built evaluation suite covering
-four of the five guardrails via live SQL generation (undefined metrics,
-out-of-scope requests, granularity mismatches, messy categorical filters),
-plus clean-query and edge-case questions checking for guardrail
-over/under-triggering. The fifth guardrail (bad-join detection) is
-intentionally excluded from this live suite — the LLM doesn't reliably
-produce a structurally-invalid join from natural language, even against a
-schema built to induce one — and is covered instead by dedicated unit
-tests against hand-crafted SQL, including a deliberately ambiguous
-synthetic dataset (see `guardrails/test_checks.py`'s `join_db_path`
-fixture). Non-deterministic outcomes (a handful of borderline questions
-that can reasonably go either way) were reviewed against the documented
-expected behavior in `tests/eval_questions.py` rather than auto-graded.
-
 ## Guardrail impact
 
+This 40-question hand-built evaluation suite covers four of the five
+guardrails via live SQL generation (undefined metrics, out-of-scope
+requests, granularity mismatches, messy categorical filters), plus
+clean-query and edge-case questions checking for guardrail
+over/under-triggering. The fifth guardrail (bad-join detection) is
+intentionally excluded — the LLM doesn't reliably produce a
+structurally-invalid join from natural language, even against a schema
+built to induce one — and is covered instead by dedicated unit tests
+against hand-crafted SQL, including a deliberately ambiguous synthetic
+dataset (see `guardrails/test_checks.py`'s `join_db_path` fixture).
+
 To measure whether the guardrails actually matter, every question in the
-evaluation suite was run twice: once through the guarded pipeline, once
-through an identical pipeline with all four guardrails active at the time
-disabled (the benchmark predates `check_bad_join`, the fifth guardrail,
-which is validated separately — see above). Answers were checked against
+suite was run twice: once through the guarded pipeline, once through an
+identical pipeline with the four guardrails active at the time disabled
+(the benchmark predates `check_bad_join`). Answers were checked against
 hand-written ground-truth queries (for granularity and categorical-filter
-issues) or graded by hand (for undefined-metric and scope issues).
+issues) or graded by hand (for undefined-metric and scope issues, and for
+the handful of borderline cases that can reasonably go either way).
 
 **Without guardrails, 56% of gradable questions (15/27) received a wrong
 or misleading answer — delivered silently, with no indication anything
