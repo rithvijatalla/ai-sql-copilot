@@ -72,14 +72,16 @@ pipeline/
   test_basic.py               Manual smoke test — a few easy questions, prints question/SQL/result
 
 guardrails/
-  checks.py                   The 4 guardrail checks (see below) — all data-driven, no hardcoded schema
+  checks.py                   The 5 guardrail checks (see below) — all data-driven, no hardcoded schema
   test_checks.py               Automated tests: deterministic for the static checks (against both the
-                                demo dataset and a second, differently-shaped synthetic dataset),
+                                demo dataset and second, differently-shaped synthetic datasets),
                                 mocked-LLM + live-LLM for the two model-backed checks
 
 tests/
-  eval_questions.py            ~20 hand-written questions across every guardrail category,
-                                each with an expected behavior and rationale
+  eval_questions.py            40 hand-written questions across four of the five guardrails via live
+                                SQL generation, plus clean-query and edge-case questions checking for
+                                guardrail over/under-triggering; each with an expected behavior and
+                                rationale
   run_eval.py                  Runs every question through ask() and prints a report for
                                 manual grading — does NOT auto-judge correctness
 ```
@@ -276,13 +278,28 @@ daily-vs-monthly grain mismatch) is built on the fly to confirm the
 detection is genuinely data-driven rather than still secretly keyed to the
 demo dataset's names.
 
-**Run the full manual evaluation** (~20 questions across every guardrail
-category, printed as a summary table plus full detail for you to grade
-yourself — this script never judges correctness on its own):
+**Run the full manual evaluation** (40 questions across four of the five
+guardrails, plus clean-query and edge-case checks, printed as a summary
+table plus full detail for you to grade yourself — this script never
+judges correctness on its own):
 
 ```bash
 python3 tests/run_eval.py
 ```
+
+Validated against this 40-question hand-built evaluation suite covering
+four of the five guardrails via live SQL generation (undefined metrics,
+out-of-scope requests, granularity mismatches, messy categorical filters),
+plus clean-query and edge-case questions checking for guardrail
+over/under-triggering. The fifth guardrail (bad-join detection) is
+intentionally excluded from this live suite — the LLM doesn't reliably
+produce a structurally-invalid join from natural language, even against a
+schema built to induce one — and is covered instead by dedicated unit
+tests against hand-crafted SQL, including a deliberately ambiguous
+synthetic dataset (see `guardrails/test_checks.py`'s `join_db_path`
+fixture). Non-deterministic outcomes (a handful of borderline questions
+that can reasonably go either way) were reviewed against the documented
+expected behavior in `tests/eval_questions.py` rather than auto-graded.
 
 ## Model
 
