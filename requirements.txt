@@ -1,5 +1,5 @@
 streamlit==1.30.0
-pandas==2.1.4
+pandas==2.3.3
 anthropic==0.120.0
 openpyxl==3.0.10
 faker==40.36.0
